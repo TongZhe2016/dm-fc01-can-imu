@@ -99,3 +99,7 @@ Raw logs, firmware, and device parameters are stored on the validation host:
 - In the same directory: `motor-on-20260927_153139/`, `can-comparison.json`, `reference-calibration-live-20260927_151708.json`, and `session.json`.
 
 Motion used the parent project's `agent.sh baseline --live --fixture-ready --anchors ... --config bounded-repaired.yaml --max-evaluations 1 --max-duration-s 300 --log-frames`; the exact command is stored in each run's `command.json`. Recording used `host/can_imu/receive.py --sync --observe-bus`. Global cumulative RX dropped counts are not evidence of drops in a particular run; use recording-socket overflow and sequence-gap counters.
+
+## Subsequent Thermal Firmware Verification
+
+The revised thermal firmware was flashed and passed bounded single-heater, dual-heater, and sensor-loss protection tests on 2026-09-27. See [THERMAL_CONTROL.md](THERMAL_CONTROL.md) for its exact image identity, results, startup overshoot, remaining environmental/calibration work, and final heater-disabled state. These results supplement the earlier release record above.

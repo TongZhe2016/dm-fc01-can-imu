@@ -8,6 +8,7 @@ float32 y                 # acceleration in the FRD board frame Y-axis in m/s^2
 float32 z                 # acceleration in the FRD board frame Z-axis in m/s^2
 
 float32 temperature       # temperature in degrees Celsius
+uint64 timestamp_temperature # time of driver temperature read, not repeated publication; 0 if unavailable
 
 uint32 error_count
 

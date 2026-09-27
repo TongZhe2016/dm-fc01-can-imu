@@ -12,6 +12,7 @@ In hardware tests on a shared bus, four motors controlled at 150 Hz plus a 200 H
 | [Implementation](docs/can-imu/IMPLEMENTATION_PLAN.md) | Board wiring, sampling, filtering, and timestamps |
 | [Build and Recovery](docs/can-imu/BUILD_AND_RECOVERY.md) | USB flashing, recovery, and CAN diagnostics |
 | [Source Layout](docs/can-imu/SOURCE_LAYOUT.md) | Directories, dependencies, and source-trimming validation |
+| [Temperature Control](docs/can-imu/THERMAL_CONTROL.md) | Vendor heater design, control protections, and thermal acceptance |
 | [Validation Record](docs/can-imu/VALIDATION.md) | Test conditions, measured results, and pending validation |
 
 ## Data and Timestamps
@@ -71,13 +72,14 @@ During initial configuration, verify the CAN1 bitrate of 1 Mbps and the IDs on t
 | `CI_TX_EN` | Enable the 200 Hz primary stream; 1 Hz status and synchronization replies remain active when disabled |
 | `CI_HEAT_EN` | Bitmask: 1 BMI088, 2 ICM45686, 3 both; default 0 |
 | `CI_HEAT_T` | Heater target; default 48°C, allowed range 30–50°C |
+| `CI0_HEAT_P/I`, `CI1_HEAT_P/I` | Per-IMU PI gains; source defaults 0.10/0.01. See the thermal tuning record for tested board settings |
 | `CI_LPF_HZ` | Pole frequency of each low-pass stage; default 60 Hz, allowed range 1–90 Hz |
 | `CI_EPOCH` | Increment after changing the primary source, calibration, or filtering to notify the receiver of a configuration change |
 | `CI_BOOT` | Stream session counter, incremented and persisted before each module start; do not manually reuse old values |
 | `CI0_AXB/AXS/AXT`, etc. | IMU0, acceleration X: bias/scale/temperature slope; independent values for 0/1, A/G, and X/Y/Z |
 | `CI0_ACAL/GCAL`, etc. | Corresponding calibration-valid flags; default 0 |
 
-Heaters are disabled by default. The implementation provides independent PI controllers, a maximum 60% duty cycle, a 200 ms temperature-update timeout, and latched faults for NaN, 60°C overtemperature, and failure to warm up within five minutes. A fault disables the affected heater; stopping the module disables both GPIO outputs. Complete physical thermal tests and fault-injection validation before enabling the heaters.
+Heaters are disabled by default. The implementation provides independent PI controllers, a maximum 60% duty cycle, a 200 ms temperature-update timeout, and latched faults for NaN, 60°C overtemperature, and failure to warm up within five minutes. A fault disables the affected heater; stopping the module disables both GPIO outputs. Complete physical thermal tests and fault-injection validation before enabling the heaters. See [Temperature Control](docs/can-imu/THERMAL_CONTROL.md) for the previous firmware design, temperature-read freshness checks, and acceptance procedure.
 
 The calibration tool generates USB parameter commands for review before writing them to the device:
 

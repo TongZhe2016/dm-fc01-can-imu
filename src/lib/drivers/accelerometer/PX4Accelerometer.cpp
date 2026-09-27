@@ -122,6 +122,7 @@ void PX4Accelerometer::update(const hrt_abstime &timestamp_sample, float x, floa
 	report.timestamp_sample = timestamp_sample;
 	report.device_id = _device_id;
 	report.temperature = _temperature;
+	report.timestamp_temperature = _temperature_timestamp;
 	report.error_count = _error_count;
 	report.x = x * _scale;
 	report.y = y * _scale;
@@ -155,6 +156,7 @@ void PX4Accelerometer::updateFIFO(sensor_accel_fifo_s &sample)
 	report.timestamp_sample = sample.timestamp_sample;
 	report.device_id = _device_id;
 	report.temperature = _temperature;
+	report.timestamp_temperature = _temperature_timestamp;
 	report.error_count = _error_count;
 
 	// trapezoidal integration (equally spaced)

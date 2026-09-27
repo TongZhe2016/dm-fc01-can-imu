@@ -61,7 +61,7 @@ USB maintenance processes share a hardware mutex; synchronization processes use 
 
 Each IMU independently stores three-axis accelerometer and gyroscope biases, scales, and temperature slopes relative to 48°C. Defaults are zero bias/slope, unit scale, and invalid calibration flags. The stationary-gyroscope and six-face accelerometer tools generate parameter commands for review. Set calibration-valid flags after calibration and residual validation.
 
-Each optional heater uses PI control, a maximum 60% duty cycle, 200 ms stale-temperature detection, and latched faults for 60°C overtemperature and a five-minute warm-up timeout. Stopping the module disables both heaters. Heaters are disabled by default; complete physical thermal tests and fault-injection validation before enabling them.
+Each optional heater uses PI control, a maximum 60% duty cycle, 200 ms stale-temperature detection, and latched faults for 60°C overtemperature and a five-minute warm-up timeout. Freshness is checked against the actual driver temperature-read timestamp; BMI088 temperature reads run nominally at 20 Hz. Stopping the module disables both heaters. See [THERMAL_CONTROL.md](THERMAL_CONTROL.md) for the vendor design, controller details, and acceptance procedure. Heaters are disabled by default; complete physical thermal tests and fault-injection validation before enabling them.
 
 ## Validation and Integration
 

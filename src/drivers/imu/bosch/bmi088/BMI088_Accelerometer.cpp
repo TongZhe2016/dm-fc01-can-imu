@@ -278,8 +278,8 @@ void BMI088_Accelerometer::RunImpl()
 				}
 
 			} else {
-				// periodically update temperature (~1 Hz)
-				if (hrt_elapsed_time(&_temperature_update_timestamp) >= 1_s) {
+				// Refresh heater feedback at 20 Hz, within its 200 ms freshness limit.
+				if (hrt_elapsed_time(&_temperature_update_timestamp) >= 50_ms) {
 					UpdateTemperature();
 					_temperature_update_timestamp = now;
 				}

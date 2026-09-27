@@ -1,4 +1,5 @@
 #include "ImuCore.hpp"
+#include "HeaterControl.hpp"
 #include <px4_platform_common/module.h>
 #include <px4_platform_common/param.h>
 #include <drivers/drv_hrt.h>
@@ -29,7 +30,9 @@ public:
  static int print_usage(const char *reason=nullptr) { if(reason) { PX4_WARN("%s",reason); } PX4_INFO("can_imu {start|stop|status}; configuration takes effect after restart"); return 0; }
  int print_status() override {
   PX4_INFO("boot=%lu source=%ld seq=%u queued=%lu tx_drop=%lu incomplete=%lu CANerr=%llu",(unsigned long)boot,(long)source,seq,(unsigned long)sent,(unsigned long)tx_drop,(unsigned long)incomplete,iface?(unsigned long long)iface->getErrorCount():0ULL);
-  for(int s=0;s<2;++s) { PX4_INFO("IMU%d T=%.2f heater_fault=%d accel/gyro gap=%lu/%lu reverse=%lu/%lu",s,(double)temp[s],heater_fault[s],(unsigned long)streams[s][0].gaps,(unsigned long)streams[s][1].gaps,(unsigned long)streams[s][0].backwards,(unsigned long)streams[s][1].backwards); }
+  for(int s=0;s<2;++s) { PX4_INFO("IMU%d T=%.2f heater_fault=%d accel/gyro gap=%lu/%lu reverse=%lu/%lu",s,(double)temp[s],int(heater[s].fault()),(unsigned long)streams[s][0].gaps,(unsigned long)streams[s][1].gaps,(unsigned long)streams[s][0].backwards,(unsigned long)streams[s][1].backwards); }
+  PX4_INFO("heater mask=%ld target=%.2f duty=%.1f/%.1f%% warm=%d/%d",(long)heat_en,(double)heat_target,(double)(100*heater[0].duty()),(double)(100*heater[1].duty()),heater[0].warm(hrt_absolute_time()),heater[1].warm(hrt_absolute_time()));
+  PX4_INFO("heater gains P=%.4f/%.4f I=%.5f/%.5f",(double)heat_kp[0],(double)heat_kp[1],(double)heat_ki[0],(double)heat_ki[1]);
   if(iface) { uint32_t r[8]; can.driver.getIface(0)->diagnosticRegisters(r); PX4_INFO("CAN CCCR=%08lx PSR=%08lx FQS=%08lx BRP=%08lx BTO=%08lx BCF=%08lx IR=%08lx IE=%08lx",(unsigned long)r[0],(unsigned long)r[1],(unsigned long)r[2],(unsigned long)r[3],(unsigned long)r[4],(unsigned long)r[5],(unsigned long)r[6],(unsigned long)r[7]); }
   return 0;
  }
@@ -42,10 +45,11 @@ private:
  uORB::Subscription temperatures[2]{{ORB_ID(sensor_accel),0},{ORB_ID(sensor_accel),1}};
  Stream streams[2][2];
  float coefficients[2][2][3][3]{};
- float temp[2]{NAN,NAN},heat_target=48,hz=60,heat_integral[2]{};
- uint64_t heat_updated=0;
- uint64_t temp_at[2]{},heat_start=0,warm_since[2]{};
- bool heater_fault[2]{},calibrated[2]{},config_ok=true;
+ float temp[2]{NAN,NAN},heat_target=48,hz=60;
+ uint64_t temp_at[2]{};
+ HeaterControl heater[2];
+ float heat_kp[2]{0.10f,0.10f},heat_ki[2]{0.01f,0.01f};
+ bool calibrated[2]{},config_ok=true;
  int32_t source=0,tx_en=1,heat_en=0,epoch=1;
  uint32_t boot=0,sent=0,tx_drop=0,incomplete=0,orb_lost=0;
  uint16_t seq=0;
@@ -67,6 +71,9 @@ void CanImu::settings() {
  if(!std::isfinite(heat_target)||heat_target<30||heat_target>50||heat_en<0||heat_en>3) { config_ok=false; }
  for(int s=0;s<2;++s) {
   int32_t ac=0,gc=0; char name[17];
+  snprintf(name,sizeof(name),"CI%d_HEAT_P",s); parameter(name,heat_kp[s]);
+  snprintf(name,sizeof(name),"CI%d_HEAT_I",s); parameter(name,heat_ki[s]);
+  if(!std::isfinite(heat_kp[s]) || heat_kp[s]<0 || heat_kp[s]>1 || !std::isfinite(heat_ki[s]) || heat_ki[s]<0 || heat_ki[s]>0.1f) { config_ok=false; }
   snprintf(name,sizeof(name),"CI%d_ACAL",s); parameter(name,ac);
   snprintf(name,sizeof(name),"CI%d_GCAL",s); parameter(name,gc); calibrated[s]=ac&&gc;
   for(int k=0;k<2;++k) { for(int a=0;a<3;++a) { for(int c=0;c<3;++c) {
@@ -115,31 +122,17 @@ void CanImu::output(uint64_t end) {
  uint8_t p[48]{}; put64(p,end);
  for(int k=0;k<3;++k) { putfloat(p+8+4*k,a[k]); putfloat(p+20+4*k,g[k]); }
  put32(p+32,boot); put16(p+36,WindowUs);
- uint16_t flags=Valid|(calibrated[source]?Calibrated:0)|(timing_bad?PollTimestamp:0)|(clipped?Clipped:0)|(heater_fault[source]?HeaterFault:0);
- if(warm_since[source] && end>warm_since[source]+10000000) { flags|=Warm; }
+ uint16_t flags=Valid|(calibrated[source]?Calibrated:0)|(timing_bad?PollTimestamp:0)|(clipped?Clipped:0)|(heater[source].fault()!=HeaterControl::None?HeaterFault:0);
+ if(heater[source].warm(end)) { flags|=Warm; }
  if(clipped) { flags&=~Valid; }
  put16(p+38,flags); put16(p+40,std::isfinite(temp[source])?int16_t(temp[source]*100):0x8000);
  p[42]=source; p[43]=1; put16(p+44,epoch); packet(DataId,seq,p,sizeof(p));
 }
 void CanImu::heaters(uint64_t now) {
  for(int s=0;s<2;++s) {
-  bool on=false;
-  if((heat_en & (1<<s)) && now>heat_start+1000000) {
-   if(!std::isfinite(temp[s])||now-temp_at[s]>200000||temp[s]>60 || (now>heat_start+300000000 && temp[s]<heat_target-5)) { heater_fault[s]=true; }
-   if(!heater_fault[s]) {
-    const float error=heat_target-temp[s];
-    const float dt=heat_updated?fminf(float(now-heat_updated)*1e-6f,0.05f):0.0f;
-    const float proposed=heat_integral[s]+0.01f*error*dt;
-    const float raw=0.10f*error+proposed;
-    if((raw>=0 && raw<=0.6f)||(raw>0.6f&&error<0)||(raw<0&&error>0)) { heat_integral[s]=fminf(0.6f,fmaxf(0.0f,proposed)); }
-    const float duty=fminf(0.6f,fmaxf(0.0f,0.10f*error+heat_integral[s]));
-    on=(now%50000)<uint64_t(duty*50000);
-   }
-  }
-  if(std::isfinite(temp[s]) && now-temp_at[s]<200000 && fabsf(temp[s]-heat_target)<1) { if(!warm_since[s]) { warm_since[s]=now; } } else { warm_since[s]=0; }
-  if(s==0) { HEATER1_OUTPUT_EN(on); } else { HEATER2_OUTPUT_EN(on); }
+  heater[s].update(now,temp[s],temp_at[s],heat_en & (1<<s),heat_target,heat_kp[s],heat_ki[s]);
+  if(s==0) { HEATER1_OUTPUT_EN(heater[s].on()); } else { HEATER2_OUTPUT_EN(heater[s].on()); }
  }
- heat_updated=now;
 }
 void CanImu::service(uint64_t now) {
  uavcan::ICanDriver &driver=can.driver;
@@ -159,7 +152,7 @@ void CanImu::service(uint64_t now) {
   last_status=now; uint8_t p[48]{}; put64(p,now); put32(p+8,boot);
   put32(p+12,tx_drop); put32(p+16,incomplete); put32(p+20,uint32_t(iface->getErrorCount())); put32(p+24,orb_lost);
   for(int s=0;s<2;++s) { put32(p+28+4*s,streams[s][0].gaps+streams[s][1].gaps); put16(p+36+2*s,std::isfinite(temp[s])?int16_t(temp[s]*100):0x8000); }
-  p[40]=source; p[41]=1; put16(p+42,epoch); p[44]=heater_fault[0]|(heater_fault[1]<<1); p[45]=calibrated[0]|(calibrated[1]<<1);
+  p[40]=source; p[41]=1; put16(p+42,epoch); p[44]=(heater[0].fault()!=HeaterControl::None)|((heater[1].fault()!=HeaterControl::None)<<1); p[45]=calibrated[0]|(calibrated[1]<<1);
   packet(StatusId,uint16_t(now/1000000),p,48);
  }
 }
@@ -174,20 +167,23 @@ void CanImu::run() {
  iface=can.driver.getIface(0);
  uavcan::CanFilterConfig filter; filter.id=SyncRequestId; filter.mask=uavcan::CanFrame::MaskExtID|uavcan::CanFrame::FlagEFF|uavcan::CanFrame::FlagRTR;
  if(iface->configureFilters(&filter,1)<0) { PX4_ERR("CAN filter failed"); return; }
- heat_start=hrt_absolute_time(); uint64_t next=(heat_start/WindowUs+2)*WindowUs;
+ const uint64_t heat_start=hrt_absolute_time();
+ for(auto &h:heater) { h.start(heat_start); }
+ uint64_t next=(heat_start/WindowUs+2)*WindowUs;
  while(!should_exit()) {
   for(int i=0;i<2;++i) {
    sensor_accel_s temperature;
    if(temperatures[i].update(&temperature)) { const unsigned type=(temperature.device_id>>16)&255; const int s=type==0x34?1:type==0x6a?0:-1;
-    if(s>=0) { temp[s]=temperature.temperature; temp_at[s]=temperature.timestamp; }
+    if(s>=0) { temp[s]=temperature.temperature; temp_at[s]=temperature.timestamp_temperature; }
    }
    sensor_accel_fifo_s a; sensor_gyro_fifo_s g;
    for(int n=0;n<16;++n) { const unsigned before=accel[i].get_last_generation(); if(!accel[i].update(&a)) { break; } const unsigned delta=accel[i].get_last_generation()-before; if(before && delta>1) { orb_lost+=delta-1; } ingest(a,0); }
    for(int n=0;n<16;++n) { const unsigned before=gyro[i].get_last_generation(); if(!gyro[i].update(&g)) { break; } const unsigned delta=gyro[i].get_last_generation()-before; if(before && delta>1) { orb_lost+=delta-1; } ingest(g,1); }
   }
   const uint64_t now=hrt_absolute_time();
+  heaters(now);
   if(now>next+3000) { if(now-next>50000) { incomplete+=uint32_t((now-next)/WindowUs); next=(now/WindowUs)*WindowUs; } else { output(next); next+=WindowUs; } }
-  heaters(now); service(now); px4_usleep(250);
+  service(now); px4_usleep(250);
  }
  HEATER1_OUTPUT_EN(false); HEATER2_OUTPUT_EN(false);
 }

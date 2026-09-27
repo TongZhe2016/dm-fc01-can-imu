@@ -246,3 +246,27 @@ PARAM_DEFINE_INT32(IMU_GYRO_RATEMAX, 2000);
  * @group CAN IMU
  */
 PARAM_DEFINE_INT32(CI_AUTOSTART, 0);
+
+/**
+ * IMU 0 heater: Proportional gain, duty per degree C (0..1)
+ * @group CAN IMU
+ */
+PARAM_DEFINE_FLOAT(CI0_HEAT_P, 0.10);
+
+/**
+ * IMU 0 heater: Integral gain, duty per degree C per second (0..0.1)
+ * @group CAN IMU
+ */
+PARAM_DEFINE_FLOAT(CI0_HEAT_I, 0.01);
+
+/**
+ * IMU 1 heater: Proportional gain, duty per degree C (0..1)
+ * @group CAN IMU
+ */
+PARAM_DEFINE_FLOAT(CI1_HEAT_P, 0.10);
+
+/**
+ * IMU 1 heater: Integral gain, duty per degree C per second (0..0.1)
+ * @group CAN IMU
+ */
+PARAM_DEFINE_FLOAT(CI1_HEAT_I, 0.01);

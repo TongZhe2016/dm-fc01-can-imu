@@ -55,7 +55,7 @@ public:
 	void set_error_count(uint32_t error_count) { _error_count = error_count; }
 	void set_range(float range) { _range = range; UpdateClipLimit(); }
 	void set_scale(float scale);
-	void set_temperature(float temperature) { _temperature = temperature; }
+	void set_temperature(float temperature) { _temperature = temperature; _temperature_timestamp = hrt_absolute_time(); }
 
 	void update(const hrt_abstime &timestamp_sample, float x, float y, float z);
 
@@ -77,6 +77,7 @@ private:
 	float			_range{16 * CONSTANTS_ONE_G};
 	float			_scale{1.f};
 	float			_temperature{NAN};
+	hrt_abstime		_temperature_timestamp{0};
 
 	float			_clip_limit{_range / _scale};
 
