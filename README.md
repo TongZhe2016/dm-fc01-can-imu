@@ -2,26 +2,29 @@
 
 目标硬件：STM32H743、BMI088、ICM45686。固件通过经典 CAN 输出六轴测量和设备时间戳，提供 USB 配置、CAN 对时和 ROS 2 接收工具。
 
-已在 DM-FC01 上完成 USB 应用刷写、200 Hz CAN 输出及四电机共线对照。1 Mbps 总线上，150 Hz 四轴控制加 200 Hz IMU 的估计占用为 **36.0%–43.7%**；本次对照无 IMU 缺样、电机过期反馈或 CAN 错误。修复后的正式版本另完成 30 分钟连续接收，359995 个样本、零缺样。测试范围和持续时间见 [验收记录](docs/can-imu/VALIDATION.md)。
+BMI088 提供 200 Hz 主流，ICM45686 用于诊断。每个样本包含三轴加速度、三轴角速度和 MCU 时间戳；主机通过 CAN 对时将设备时间映射到 ROS 时钟。
 
-当前源码裁剪版已通过完整编译和离线检查；实机数据对应验收记录中的已刷入版本。源码构成见 [SOURCE_LAYOUT.md](docs/can-imu/SOURCE_LAYOUT.md)。
+实机共线测试中，四电机 150 Hz 控制加 200 Hz IMU 的总线占用约为 36.0%–43.7%，30 分钟记录收到 359995 个样本，零缺样。实机结果对应已刷入版本；当前源码裁剪版已通过完整构建和离线检查，待刷入验证。
 
-CAN 使用标准帧：样本 `0x680–687`、状态 `0x6A0–6A7`、对时回复 `0x6B0–6B3`、对时请求 `0x6C0`。ENCOS 电机保持 ID 1–4，配置帧为 0x7FF。首次配置默认不自动输出；核对共享总线 ID 后设置 `CI_AUTOSTART=1` 并保存。
+| 文档 | 内容 |
+|---|---|
+| [协议](docs/can-imu/PROTOCOL.md) | CAN ID、分片、字段和对时规则 |
+| [实现](docs/can-imu/IMPLEMENTATION_PLAN.md) | 板级接线、采样、滤波和时间戳 |
+| [构建与恢复](docs/can-imu/BUILD_AND_RECOVERY.md) | USB 刷写、恢复和 CAN 诊断 |
+| [源码组成](docs/can-imu/SOURCE_LAYOUT.md) | 目录、依赖和裁剪验证 |
+| [验收记录](docs/can-imu/VALIDATION.md) | 测试条件、实测结果和待验证项 |
 
-## 数据链
+## 数据与时间戳
 
-- 两颗传感器分别消费原始 FIFO；乘消息中的 scale 换算为 m/s² 和 rad/s。
-- 保留厂商驱动固定旋转 `-R 4`。没有水平校正、重力扣除或世界坐标旋转。垂直安装不改变这条链。三轴方向仍需要实物逐轴验证，之后核对 IMU→动捕外参。
-- 每颗传感器的处理顺序：减偏置和温度补偿（参考 48°C）→逐轴比例→两级一阶低通→同一设备时间网格上的 5 ms 窗口平均。
-- 每级低通极点默认 60 Hz；组合的 −3 dB 频率约 38.6 Hz，低频群延迟约 5.3 ms。窗口平均另有约 2.5 ms 的中心延迟。时间字段是窗口末端，不是补偿过群延迟的等效瞬时采样时间。
-- BMI088 默认主流 200 Hz；DRDY 回退到轮询时明确置时间质量位。ICM45686 的当前轮询时间戳使其仅适合诊断；未实现已验证的双 IMU 融合。
-- 任何缺口超过三倍 nominal dt 都不插值补齐；覆盖不完整的窗口丢弃并计数。FIFO 发布队列深度为 16，消费端记录丢更新。
+驱动将 FIFO 原始值换算为 m/s² 和 rad/s，再依次应用偏置、温度补偿、逐轴比例、两级低通和 5 ms 窗口平均。每级低通默认 60 Hz，组合 −3 dB 频率约 38.6 Hz。
+
+时间戳表示采样窗口的末端。低通约 5.3 ms 的低频群延迟和窗口约 2.5 ms 的中心延迟需要在 EKF 时间对齐时考虑。正式 ROS 话题使用同步后的设备时间。
+
+输出采用厂商驱动固定旋转 `-R 4`，保留重力响应和实际安装倾角。接入前需逐轴核对 IMU→动捕外参。BMI088 使用 DRDY 采样时刻；轮询回退会设置时间质量位。ICM45686 的逐样本计时和双 IMU 融合仍待实现、验证。
 
 ## 构建和刷写
 
-本仓库保留厂商 PX4/NuttX 板级源码和许可证，基线 `b3d0fad488ac158d7af8cafb5de2b4ef8bc162b3`。
-
-当前主机使用 ARM GCC 13.2.1、Ninja、已有 NuttX 子模块，以及本机 `.omx/venvs/can-imu-build` 中的构建期 `pyros-genmsg`。主机接收器使用 Python 标准库；USB 工具使用已有 pyserial。
+构建工具为 CMake、Ninja、GNU Arm Embedded GCC（已测 13.2.1）、newlib 和 genromfs。Python 环境需要 kconfiglib、pyelftools、toml、empy 3.3.4 和 pyros-genmsg。主机接收器使用 Python 标准库，USB 工具另需 pyserial。
 
 独立检出并初始化本目标使用的依赖：
 
@@ -33,14 +36,14 @@ git submodule update --init --recursive -- \
   src/lib/events/libevents src/lib/heatshrink/heatshrink
 ```
 
-构建环境还需要 CMake、genromfs、ARM newlib，以及 Python 的 empy 3.3.4、kconfiglib、pyros-genmsg。以下是本次已验证主机的构建命令；换电脑时替换 Python 路径：
+下面使用验收主机的 Python 路径；在其他电脑上替换 `PYTHON_EXECUTABLE`：
 
 ```bash
 make damiao_dm-fc01_imu -j4 \
   PYTHON_EXECUTABLE=/home/airman/FC-CLAMP_Real_Drone/.omx/venvs/can-imu-build/bin/python
 ```
 
-产物：`build/damiao_dm-fc01_imu/damiao_dm-fc01_imu.px4`，board ID 必须为 7140。不要并发运行同一 build 目录的构建。固件包含独立 ROMFS `ROMFS/can_imu`，USB 先启动，随后加载参数和传感器，`CI_AUTOSTART=1` 时启动 CAN。
+产物为 `build/damiao_dm-fc01_imu/damiao_dm-fc01_imu.px4`，board ID 为 7140。同一构建目录只运行一个构建进程。
 
 在仓库根目录，确认目标串口为 DM-FC01 后刷写应用：
 
@@ -49,11 +52,7 @@ python3 host/can_imu/flash.py \
   build/damiao_dm-fc01_imu/damiao_dm-fc01_imu.px4
 ```
 
-已实测正常 USB 控制台可软件进入 bootloader，无需 Boot 键；应用卡死且 USB 消失时，电脑无法再发复位指令。先准备 uploader，再现场 RESET/完整断电上电捕获 bootloader。仅重置主机 USB 端口不保证复位独立供电的 MCU。
-
-本任务恢复镜像保存在本机 `.omx/artifacts/dm-fc01-imu/usb-rescue.px4`，只启动 USB。原厂应用恢复参考为 `real_drone/docs/dm-fc01/固件/PX4/damiao_dm-fc01_V1.16.px4`；它与最初板上应用不是同一 git hash。原参数备份为本机 `factory-parameters.json` 和 `preflash.json`。刷写不更新 bootloader。
-
-恢复细节与本次 Jetson USB 故障处理见 [BUILD_AND_RECOVERY.md](docs/can-imu/BUILD_AND_RECOVERY.md)。
+USB 控制台正常时，刷写工具可让应用软件重启进入 bootloader，无需按 Boot 键。刷写只更新应用。USB 枚举失败、设备复位及恢复镜像的处理见[构建与恢复](docs/can-imu/BUILD_AND_RECOVERY.md)。
 
 ## USB 配置
 
@@ -61,7 +60,9 @@ python3 host/can_imu/flash.py \
 python3 host/can_imu/usb_query.py --plain 'can_imu status' 'bmi088 -A status'
 ```
 
-参数在模块启动时读取；更改后 `param save`，再执行 `can_imu stop` 和 `can_imu start`。每次启动递增流会话。已验证 USB 下停止/重启，以及保存 `CI_AUTOSTART=1` 后刷写重启自动恢复 CAN 主流。当前实物已启用自动启动；新板默认仍为 0。
+模块启动时读取参数。修改后执行 `param save`，再用 `can_imu stop`、`can_imu start` 重启模块。每次启动递增流会话编号。
+
+首次配置时核对 CAN1 的 1 Mbps 波特率和共享总线 ID，再设置并保存 `CI_AUTOSTART=1`。固件默认值为 0；验收板已启用上电自启。
 
 | 参数 | 含义 |
 |---|---|
@@ -76,16 +77,16 @@ python3 host/can_imu/usb_query.py --plain 'can_imu status' 'bmi088 -A status'
 | `CI0_AXB/AXS/AXT` 等 | IMU0、加速度X：偏置/比例/温度斜率；0/1、A/G、X/Y/Z 均独立 |
 | `CI0_ACAL/GCAL` 等 | 对应标定有效标记，默认 0 |
 
-加热器默认关闭。实现了独立 PI、最大 60% 占空比、温度更新超时 200 ms、NaN/60°C 过温和五分钟未升温故障锁存。故障后关闭相应加热器；停止模块关闭两路 GPIO。保护实现和温控性能尚未通过实物热测试。
+加热器默认关闭。实现了独立 PI、最大 60% 占空比、温度更新超时 200 ms、NaN/60°C 过温和五分钟未升温故障锁存。故障时关闭对应加热器，模块停止时关闭两路 GPIO。启用前需完成实物热测试和故障注入验证。
 
-标定工具输出可审核的 USB 参数命令，不自动写板：
+标定工具生成 USB 参数命令，审核后再写入设备：
 
 ```bash
 python3 host/can_imu/calibrate.py --gyro samples.jsonl --source 0 --output gyro-cal.json
 python3 host/can_imu/calibrate.py --faces faces.json --source 0 --output accel-cal.json
 ```
 
-录制前将对应偏置和温度斜率设为 0、比例设为 1；五秒以上静置、完整连续记录，使用实际工作温度。六面 JSON 将 `x+、x-、y+、y-、z+、z-` 映射到六份日志。工具检查运动、标签轴和合理范围，但不能代替独立六面残差验收。当前安装只允许 ±5° 电机运动，不能自动完成六面标定。温度斜率需专门热标定，本工具不拟合它。
+在实际工作温度下录制至少五秒静止、连续数据。录制前将对应偏置和温度斜率设为 0、比例设为 1。六面 JSON 将 `x+、x-、y+、y-、z+、z-` 映射到六份日志。工具检查运动、标签轴和数值范围；写入参数后还需检查独立六面残差。温度斜率通过专门热标定获取。
 
 ## 主机接收与 ROS 2
 
@@ -94,9 +95,9 @@ python3 host/can_imu/receive.py --interface can0 --duration 30 \
   --sync --observe-bus --output /tmp/imu-record
 ```
 
-保持现有 can0 配置；接收器不修改波特率、不关闭共享总线。对时发送仅使用协议白名单 ID，由独立实例锁限制单写入者。电机工具继续持有原硬件锁。`--observe-bus` 用于负载统计；不加时只订阅 IMU ID。负载给出标准/扩展经典帧位填充的上下界，不是示波器实测利用率。
+接收器使用已有的 `can0` 配置。`--sync` 开启 CAN 对时，同一接口只允许一个对时进程；`--observe-bus` 订阅全总线，用于估计负载。省略该选项时只接收 IMU 帧。
 
-输出包括完整样本、状态、对时事件和 summary；有效频率、缺样、到达间隔、估计样本年龄、同步拟合残差、噪声和 socket 丢包分开报告。Linux 用户态接收时间包含主机调度延迟。设备 t2 是驱动出队时间，t3 是回复排队前时间；这不是硬件收发打点，拟合残差不能证明绝对同步精度。
+日志记录样本、状态和对时事件，summary 汇总频率、缺样、到达间隔、样本年龄、同步残差、轴统计及 socket 丢包。总线负载按报文长度和位填充上下界估计；时间统计包含主机调度延迟。对时打点和精度说明见[协议](docs/can-imu/PROTOCOL.md)。
 
 ROS 包：`ros2/fc_clamp_can_imu`。它安装本仓库 `host/can_imu` 的同一套 Python 解析代码。
 
@@ -113,7 +114,7 @@ ros2 launch fc_clamp_can_imu imu.launch.py
 - `/ee_imu/data`：时间已同步、样本有效、默认要求已标定；拒绝轮询时间戳及过期样本。`require_warm` 可要求温稳。
 - `/ee_imu/diagnostics`：JSON 状态、会话、配置版本、计数器。
 
-Imu 消息不提供姿态，`orientation_covariance[0]=-1`。六轴协方差保持未知，不冒充实测噪声。没有自动改动现有 EE EKF 的 MAVROS 启动和外参；坐标、噪声和时间延迟验收后再切换输入。
+`sensor_msgs/Imu` 中，`orientation_covariance[0]=-1` 表示姿态不可用；六轴协方差为 0，表示未知。完成坐标、噪声和时间延迟验收后，再将 `/ee_imu/data` 接入 EKF。
 
 ## 离线检查
 
@@ -127,19 +128,8 @@ g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined \
 
 协议布局见 [PROTOCOL.md](docs/can-imu/PROTOCOL.md)，硬件结果及未完成项见 [VALIDATION.md](docs/can-imu/VALIDATION.md)。
 
-## 独立仓库依赖与维护
+## 维护
 
-仅初始化 IMU 构建所需子模块：
+USB 工具默认使用 NSH 控制台，兼容 `--plain` 参数。刷写工具检查 board ID 并获取硬件互斥锁：在主项目中使用 `.omx/state/hardware-can.lock`，独立检出使用 `$XDG_STATE_HOME/dm-fc01-can-imu/hardware.lock`，默认位于 `~/.local/state`。`CAN_IMU_HARDWARE_LOCK` 可指定共享锁路径。
 
-```bash
-git submodule update --init -- platforms/nuttx/NuttX/apps platforms/nuttx/NuttX/nuttx \
-  src/lib/events/libevents src/lib/heatshrink/heatshrink
-```
-
-构建工具：CMake、Ninja、GNU Arm Embedded GCC（已测 13.2.1）、newlib、genromfs，以及 Python 的 kconfiglib、pyelftools、toml、empy 3.3.4、pyros-genmsg。使用 `PYTHON_EXECUTABLE` 指定已有环境；README 上面的绝对路径是本次测试环境，可替换为自己的 Python。
-
-USB 维护工具使用 NSH 控制台，依赖 pyserial；`usb_query.py` 默认使用该模式，并兼容现有 `--plain` 调用。
-
-推荐刷写入口 `python3 host/can_imu/flash.py build/damiao_dm-fc01_imu/damiao_dm-fc01_imu.px4` 会检查 board ID 并获取互斥锁。在主项目内使用主项目 `.omx/state/hardware-can.lock`；独立检出使用 `$XDG_STATE_HOME/dm-fc01-can-imu/hardware.lock`（默认 `~/.local/state`）。可用 `CAN_IMU_HARDWARE_LOCK` 显式指定共享锁。
-
-源码组成和裁剪验收见 [SOURCE_LAYOUT.md](docs/can-imu/SOURCE_LAYOUT.md)。构建目标为 `damiao_dm-fc01_imu`。NuttX 内核、NuttX 应用支持、libevents 和 heatshrink 以固定提交的子模块维护。已有 Git 历史保留以便追溯；新检出可使用上面的浅克隆命令。
+NuttX 内核、NuttX 应用支持、libevents 和 heatshrink 以固定提交的子模块维护。Git 历史保留硬件验收版本和裁剪基线；目录与版本说明见[源码组成](docs/can-imu/SOURCE_LAYOUT.md)。

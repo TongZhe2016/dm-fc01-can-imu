@@ -1,1 +1,3 @@
-This folder contains a python library used by px_process_params.py
+# Airframe metadata helpers
+
+Python modules used by [`px_process_airframes.py`](../px_process_airframes.py) to parse airframe definitions and generate metadata.
