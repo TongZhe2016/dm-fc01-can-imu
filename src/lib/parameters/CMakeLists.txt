@@ -79,40 +79,7 @@ endif()
 list(REMOVE_DUPLICATES module_list)
 
 set(generated_params_dir ${PX4_BINARY_DIR}/generated_params)
-set(generated_serial_params_file ${generated_params_dir}/serial_params.c)
-set(generated_module_params_file ${generated_params_dir}/module_params.c)
-file(GLOB jinja_templates ${PX4_SOURCE_DIR}/Tools/serial/*.jinja)
-if (px4_constrained_flash_build)
-	set(constrained_flash_arg --constrained-flash)
-endif()
-if(PX4_ETHERNET)
-	set(added_arguments --ethernet)
-endif()
-if(CONFIG_BOARD_IO)
-	set(board_with_io_arg --board-with-io)
-endif()
-
-add_custom_command(OUTPUT ${generated_serial_params_file} ${generated_module_params_file}
-	COMMAND ${CMAKE_COMMAND} -E make_directory ${generated_params_dir}
-	COMMAND ${PYTHON_EXECUTABLE} ${PX4_SOURCE_DIR}/Tools/serial/generate_config.py
-		--params-file ${generated_serial_params_file}
-		--serial-ports ${board_serial_ports} ${added_arguments} ${constrained_flash_arg}
-		--config-files ${module_config_files}
-		#--verbose
-	COMMAND ${PYTHON_EXECUTABLE} ${PX4_SOURCE_DIR}/Tools/module_config/generate_params.py
-		--params-file ${generated_module_params_file}
-		${added_arguments} ${board_with_io_arg}
-		--timer-config ${PX4_BOARD_DIR}/src/timer_config.cpp
-		--config-files ${module_config_files}
-		--board ${PX4_BOARD}
-		#--verbose
-	DEPENDS
-		${module_config_files}
-		${jinja_templates}
-		${PX4_SOURCE_DIR}/Tools/serial/generate_config.py
-		${PX4_SOURCE_DIR}/Tools/module_config/generate_params.py
-	COMMENT "Generating serial_params.c"
-)
+file(MAKE_DIRECTORY ${generated_params_dir})
 
 set(parameters_xml ${PX4_BINARY_DIR}/parameters.xml)
 set(parameters_json ${PX4_BINARY_DIR}/parameters.json)
@@ -133,8 +100,6 @@ add_custom_command(OUTPUT ${parameters_xml} ${parameters_json} ${parameters_json
 		#--verbose
 	DEPENDS
 		${param_src_files}
-		${generated_serial_params_file}
-		${generated_module_params_file}
 		px4params/srcparser.py
 		px4params/srcscanner.py
 		px4params/jsonout.py

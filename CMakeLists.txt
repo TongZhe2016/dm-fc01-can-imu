@@ -187,6 +187,9 @@ if(PYTHON_COVERAGE)
 	set(PYTHON_EXECUTABLE coverage run -p)
 endif()
 
+if(NOT CONFIG STREQUAL "damiao_dm-fc01_imu")
+  message(FATAL_ERROR "Configure with -DCONFIG=damiao_dm-fc01_imu")
+endif()
 include(px4_config)
 include(kconfig)
 message(STATUS "PX4 config: ${PX4_CONFIG}")
@@ -345,7 +348,7 @@ if(${PX4_CONFIG} STREQUAL "px4_sitl_test")
 	set(CMAKE_TESTING ON)
 endif()
 if(CMAKE_TESTING)
-	include(CTest) # sets BUILD_TESTING variable
+	set(BUILD_TESTING OFF)
 endif()
 
 # enable test filtering to run only specific tests with the ctest -R regex functionality
@@ -438,7 +441,7 @@ endforeach()
 # add events lib after modules and libs as it needs to know all source files (PX4_SRC_FILES)
 add_subdirectory(src/lib/events EXCLUDE_FROM_ALL)
 # metadata needs PX4_MODULE_CONFIG_FILES
-add_subdirectory(src/lib/metadata EXCLUDE_FROM_ALL)
+
 
 # must be the last module before firmware
 add_subdirectory(src/lib/parameters EXCLUDE_FROM_ALL)
@@ -455,42 +458,6 @@ endif()
 
 # firmware added last to generate the builtin for included modules
 add_subdirectory(platforms/${PX4_PLATFORM})
-
-#=============================================================================
-# uORB graph generation: add a custom target 'uorb_graph'
-#
-set(uorb_graph_config ${PX4_BOARD})
-
-set(graph_module_list "")
-foreach(module ${config_module_list})
-	set(graph_module_list "${graph_module_list}" "--src-path" "src/${module}")
-endforeach()
-
-add_custom_command(OUTPUT ${uorb_graph_config}
-	COMMAND ${PYTHON_EXECUTABLE} ${PX4_SOURCE_DIR}/Tools/uorb_graph/create.py
-		${graph_module_list} --src-path src/lib
-		--merge-depends
-		--exclude-path src/examples
-		--exclude-path src/lib/parameters # FIXME: enable & fix
-		--file ${PX4_SOURCE_DIR}/Tools/uorb_graph/graph_${uorb_graph_config}
-	WORKING_DIRECTORY ${PX4_SOURCE_DIR}
-	COMMENT "Generating uORB graph"
-)
-add_custom_target(uorb_graph DEPENDS ${uorb_graph_config})
-
-
-include(bloaty)
-
-
-include(metadata)
-include(package)
-
-# install python requirements using configured python
-add_custom_target(install_python_requirements
-	COMMAND ${PYTHON_EXECUTABLE} -m pip install --break-system-packages --requirement ${PX4_SOURCE_DIR}/Tools/setup/requirements.txt
-	DEPENDS ${PX4_SOURCE_DIR}/Tools/setup/requirements.txt
-	USES_TERMINAL
-)
 
 if(EXISTS "${PX4_SOURCE_DIR}/platforms/${PX4_PLATFORM}/cmake/finalize.cmake")
 	include(finalize)

@@ -5,11 +5,13 @@ on:
     paths:
       - 'host/can_imu/**'
       - 'src/modules/can_imu/**'
+      - 'src/drivers/uavcan/**'
       - '.github/workflows/can-imu-checks.yml'
   pull_request:
     paths:
       - 'host/can_imu/**'
       - 'src/modules/can_imu/**'
+      - 'src/drivers/uavcan/**'
 permissions:
   contents: read
 jobs:
@@ -20,3 +22,5 @@ jobs:
       - run: PYTHONPATH=host/can_imu python3 -m unittest discover -s host/can_imu/tests -v
       - run: g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/modules/can_imu host/can_imu/tests/core_test.cpp -o /tmp/can-imu-core-test
       - run: /tmp/can-imu-core-test
+      - run: g++ -std=c++14 -Wall -Wextra -Werror -DUAVCAN_CPP_VERSION=2003 -DUAVCAN_TOSTRING=0 -DUAVCAN_NO_ASSERTIONS -Isrc/drivers/uavcan/libdronecan/libuavcan/include host/can_imu/tests/transport_time_test.cpp -o /tmp/can-imu-transport-time-test
+      - run: /tmp/can-imu-transport-time-test

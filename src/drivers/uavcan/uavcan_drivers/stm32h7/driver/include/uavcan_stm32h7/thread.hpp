@@ -18,7 +18,7 @@
 # error "Unknown OS"
 #endif
 
-#include <uavcan/uavcan.hpp>
+#include <uavcan/driver/can.hpp>
 
 namespace uavcan_stm32h7
 {

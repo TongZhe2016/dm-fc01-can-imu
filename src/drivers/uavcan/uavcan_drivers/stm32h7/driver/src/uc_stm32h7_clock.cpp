@@ -9,6 +9,7 @@
 #if UAVCAN_STM32H7_TIMER_NUMBER
 
 #include <cassert>
+#include <new>
 #include <math.h>
 
 /*

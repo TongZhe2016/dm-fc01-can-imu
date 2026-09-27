@@ -148,7 +148,8 @@ def write_fields_to_hpp_file(file_name: str, definitions: dict, window_length: i
         ((len(definitions[k]['fields']), k) for k in definitions), key=itemgetter(0))
     max_untokenized_field_length = max(definitions[k]['fields_total_length'] for k in definitions)
     max_num_orb_ids = max(len(definitions[k]['orb_ids']) for k in definitions)
-    max_num_orb_id_dependencies = max(len(definitions[k]['dependencies']) for k in definitions)
+    # Reserve storage even when the selected messages have no nested types.
+    max_num_orb_id_dependencies = max(1, max(len(definitions[k]['dependencies']) for k in definitions))
 
     with open(file_name, 'w') as file_handle:
         file_handle.write('''

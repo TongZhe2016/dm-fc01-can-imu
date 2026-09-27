@@ -35,7 +35,7 @@ if(EXISTS ${BOARD_DEFCONFIG})
 	# Depend on BOARD_DEFCONFIG so that we reconfigure on config change
 	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${BOARD_DEFCONFIG})
 
-	if(${LABEL} MATCHES "default" OR ${LABEL} MATCHES "performance-test" OR ${LABEL} MATCHES "bootloader" OR ${LABEL} MATCHES "canbootloader")
+	if(${LABEL} STREQUAL "imu" OR ${LABEL} MATCHES "default" OR ${LABEL} MATCHES "performance-test" OR ${LABEL} MATCHES "bootloader" OR ${LABEL} MATCHES "canbootloader")
 		# Generate boardconfig from saved defconfig
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} -E env ${COMMON_KCONFIG_ENV_SETTINGS}
@@ -268,16 +268,12 @@ if(EXISTS ${BOARD_DEFCONFIG})
 		list(APPEND romfs_extra_files
 			${PX4_BINARY_DIR}/parameters.json.xz
 			${PX4_BINARY_DIR}/events/all_events.json.xz
-			${PX4_BINARY_DIR}/actuators.json.xz
 			)
 		list(APPEND romfs_extra_dependencies
 			parameters_xml
 			events_json
-			actuators_json
 			)
 	endif()
-	list(APPEND romfs_extra_files ${PX4_BINARY_DIR}/component_general.json.xz)
-	list(APPEND romfs_extra_dependencies component_general_json)
 	set(config_romfs_extra_files ${romfs_extra_files} CACHE INTERNAL "extra ROMFS files" FORCE)
 	set(config_romfs_extra_dependencies ${romfs_extra_dependencies} CACHE INTERNAL "extra ROMFS deps" FORCE)
 
@@ -420,7 +416,7 @@ if(EXISTS ${BOARD_DEFCONFIG})
 endif()
 
 
-if(${LABEL} MATCHES "default" OR ${LABEL} MATCHES "bootloader" OR ${LABEL} MATCHES "canbootloader")
+if(${LABEL} STREQUAL "imu" OR ${LABEL} MATCHES "default" OR ${LABEL} MATCHES "bootloader" OR ${LABEL} MATCHES "canbootloader")
 	add_custom_target(boardconfig
 		${CMAKE_COMMAND} -E env ${COMMON_KCONFIG_ENV_SETTINGS} ${MENUCONFIG_PATH} Kconfig
 		COMMAND ${CMAKE_COMMAND} -E env ${COMMON_KCONFIG_ENV_SETTINGS} ${SAVEDEFCONFIG_PATH}

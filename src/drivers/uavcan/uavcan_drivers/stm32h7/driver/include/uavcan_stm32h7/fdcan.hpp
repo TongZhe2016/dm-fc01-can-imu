@@ -7,7 +7,7 @@
 
 #include <uavcan_stm32h7/build_config.hpp>
 
-#include <uavcan/uavcan.hpp>
+#include <uavcan/driver/can.hpp>
 #include <stdint.h>
 
 #ifndef UAVCAN_CPP_VERSION

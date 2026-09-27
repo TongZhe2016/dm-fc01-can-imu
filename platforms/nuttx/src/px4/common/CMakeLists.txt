@@ -76,8 +76,8 @@ endif()
 
 add_dependencies(px4_layer prebuild_targets)
 
-add_subdirectory(gpio)
-add_subdirectory(srgbled)
+
+
 
 # Build px4_random
 if (DEFINED PX4_CRYPTO)

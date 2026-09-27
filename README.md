@@ -1,8 +1,10 @@
 # DM-FC01 独立 CAN IMU
 
-目标硬件：STM32H743、BMI088、ICM45686。应用基于厂商 PX4/NuttX 板级支持，输出六轴测量，不启动飞行控制或姿态估计模块。
+目标硬件：STM32H743、BMI088、ICM45686。固件通过经典 CAN 输出六轴测量和设备时间戳，提供 USB 配置、CAN 对时和 ROS 2 接收工具。
 
 已在 DM-FC01 上完成 USB 应用刷写、200 Hz CAN 输出及四电机共线对照。1 Mbps 总线上，150 Hz 四轴控制加 200 Hz IMU 的估计占用为 **36.0%–43.7%**；本次对照无 IMU 缺样、电机过期反馈或 CAN 错误。修复后的正式版本另完成 30 分钟连续接收，359995 个样本、零缺样。测试范围和持续时间见 [验收记录](docs/can-imu/VALIDATION.md)。
+
+当前源码裁剪版已通过完整编译和离线检查；实机数据对应验收记录中的已刷入版本。源码构成见 [SOURCE_LAYOUT.md](docs/can-imu/SOURCE_LAYOUT.md)。
 
 CAN 使用标准帧：样本 `0x680–687`、状态 `0x6A0–6A7`、对时回复 `0x6B0–6B3`、对时请求 `0x6C0`。ENCOS 电机保持 ID 1–4，配置帧为 0x7FF。首次配置默认不自动输出；核对共享总线 ID 后设置 `CI_AUTOSTART=1` 并保存。
 
@@ -24,17 +26,14 @@ CAN 使用标准帧：样本 `0x680–687`、状态 `0x6A0–6A7`、对时回复
 独立检出并初始化本目标使用的依赖：
 
 ```bash
-git clone git@github.com:TongZhe2016/dm-fc01-can-imu.git
+git clone --depth 1 git@github.com:TongZhe2016/dm-fc01-can-imu.git
 cd dm-fc01-can-imu
 git submodule update --init --recursive -- \
   platforms/nuttx/NuttX/apps platforms/nuttx/NuttX/nuttx \
-  src/drivers/uavcan/libdronecan/dsdl \
-  src/drivers/uavcan/libdronecan/libuavcan/dsdl_compiler/pydronecan \
-  src/lib/events/libevents src/lib/heatshrink/heatshrink \
-  src/modules/mavlink/mavlink
+  src/lib/events/libevents src/lib/heatshrink/heatshrink
 ```
 
-MAVLink 子模块用于上游构建元数据；本固件没有启动 MAVLink 通信任务。构建环境还需要 CMake、genromfs、ARM newlib，以及 Python 的 empy 3.3.4、kconfiglib、pyros-genmsg。以下是本次已验证主机的构建命令；换电脑时替换 Python 路径：
+构建环境还需要 CMake、genromfs、ARM newlib，以及 Python 的 empy 3.3.4、kconfiglib、pyros-genmsg。以下是本次已验证主机的构建命令；换电脑时替换 Python 路径：
 
 ```bash
 make damiao_dm-fc01_imu -j4 \
@@ -134,15 +133,13 @@ g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined \
 
 ```bash
 git submodule update --init -- platforms/nuttx/NuttX/apps platforms/nuttx/NuttX/nuttx \
-  src/drivers/uavcan/libdronecan/dsdl \
-  src/drivers/uavcan/libdronecan/libuavcan/dsdl_compiler/pydronecan \
-  src/lib/events/libevents src/lib/heatshrink/heatshrink src/modules/mavlink/mavlink
+  src/lib/events/libevents src/lib/heatshrink/heatshrink
 ```
 
 构建工具：CMake、Ninja、GNU Arm Embedded GCC（已测 13.2.1）、newlib、genromfs，以及 Python 的 kconfiglib、pyelftools、toml、empy 3.3.4、pyros-genmsg。使用 `PYTHON_EXECUTABLE` 指定已有环境；README 上面的绝对路径是本次测试环境，可替换为自己的 Python。
 
-USB 独立固件使用 `usb_query.py --plain`，仅依赖 pyserial。`backup_parameters.py` 和未加 `--plain` 的查询仅用于原厂 MAVLink 固件，需环境中已有 pymavlink；独立 IMU 固件不提供 MAVLink。工具不再引用旧参考仓库。
+USB 维护工具使用 NSH 控制台，依赖 pyserial；`usb_query.py` 默认使用该模式，并兼容现有 `--plain` 调用。
 
 推荐刷写入口 `python3 host/can_imu/flash.py build/damiao_dm-fc01_imu/damiao_dm-fc01_imu.px4` 会检查 board ID 并获取互斥锁。在主项目内使用主项目 `.omx/state/hardware-can.lock`；独立检出使用 `$XDG_STATE_HOME/dm-fc01-can-imu/hardware.lock`（默认 `~/.local/state`）。可用 `CAN_IMU_HARDWARE_LOCK` 显式指定共享锁。
 
-保留的上游介绍见 [README.px4.md](README.px4.md)，实现范围见 [IMPLEMENTATION_PLAN.md](docs/can-imu/IMPLEMENTATION_PLAN.md)。本仓库仍包含上游其他板型源码，实际交付构建目标为 `damiao_dm-fc01_imu`。
+源码组成和裁剪验收见 [SOURCE_LAYOUT.md](docs/can-imu/SOURCE_LAYOUT.md)。构建目标为 `damiao_dm-fc01_imu`。NuttX 内核、NuttX 应用支持、libevents 和 heatshrink 以固定提交的子模块维护。已有 Git 历史保留以便追溯；新检出可使用上面的浅克隆命令。

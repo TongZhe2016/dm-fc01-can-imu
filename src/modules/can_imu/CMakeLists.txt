@@ -18,13 +18,4 @@ px4_add_module(
   ${CAN_ROOT}/libdronecan/libuavcan/src/uc_error.cpp
  DEPENDS px4_work_queue
 )
-# The transport's time type includes the generated Timestamp definition.
-set(CAN_DSDL ${CMAKE_CURRENT_BINARY_DIR}/dsdl)
-add_custom_command(OUTPUT ${CAN_DSDL}/uavcan/Timestamp.hpp
- COMMAND ${PYTHON_EXECUTABLE} ${CAN_ROOT}/libdronecan/libuavcan/dsdl_compiler/libuavcan_dsdlc
- --outdir ${CAN_DSDL} ${CAN_ROOT}/libdronecan/dsdl/uavcan
- DEPENDS ${CAN_ROOT}/libdronecan/dsdl/uavcan/Timestamp.uavcan)
-add_custom_target(can_imu_dsdl DEPENDS ${CAN_DSDL}/uavcan/Timestamp.hpp)
-add_dependencies(modules__can_imu can_imu_dsdl)
-target_include_directories(modules__can_imu PRIVATE ${CAN_DSDL})
 target_compile_options(modules__can_imu PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-copy>)

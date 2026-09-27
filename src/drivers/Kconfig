@@ -1,1 +1,3 @@
-rsource "*/Kconfig"
+source "src/drivers/cdcacm_autostart/Kconfig"
+source "src/drivers/imu/bosch/bmi088/Kconfig"
+source "src/drivers/imu/invensense/icm45686/Kconfig"

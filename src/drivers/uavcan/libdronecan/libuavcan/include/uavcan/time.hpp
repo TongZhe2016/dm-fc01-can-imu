@@ -9,7 +9,7 @@
 #include <uavcan/std.hpp>
 #include <uavcan/build_config.hpp>
 #include <uavcan/util/templates.hpp>
-#include <uavcan/Timestamp.hpp>
+
 
 
 namespace uavcan
@@ -188,29 +188,7 @@ class UAVCAN_EXPORT MonotonicTime : public TimeBase<MonotonicTime, MonotonicDura
  */
 class UAVCAN_EXPORT UtcDuration : public DurationBase<UtcDuration> { };
 
-class UAVCAN_EXPORT UtcTime : public TimeBase<UtcTime, UtcDuration> /// Implicitly convertible to/from uavcan.Timestamp
-{
-public:
-    UtcTime() { }
-
-    UtcTime(const Timestamp& ts)  // Implicit
-    {
-        operator=(ts);
-    }
-
-    UtcTime& operator=(const Timestamp& ts)
-    {
-        *this = fromUSec(ts.usec);
-        return *this;
-    }
-
-    operator Timestamp() const
-    {
-        Timestamp ts;
-        ts.usec = toUSec();
-        return ts;
-    }
-};
+class UAVCAN_EXPORT UtcTime : public TimeBase<UtcTime, UtcDuration> { };
 
 // ----------------------------------------------------------------------------
 

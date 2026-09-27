@@ -1,7 +1,7 @@
 # PX4 Firmware Configuration
 
 
-mainmenu "PX4 Firmware Configuration"
+mainmenu "DM-FC01 CAN IMU Configuration"
 
 comment "Vendor: $(VENDOR)"
 comment "Model: $(MODEL)"
@@ -206,9 +206,6 @@ menu "systemcmds"
 source "src/systemcmds/Kconfig"
 endmenu
 
-menu "examples"
-source "src/examples/Kconfig"
-endmenu
 
 menu "platforms"
 depends on PLATFORM_QURT || PLATFORM_POSIX || PLATFORM_NUTTX
