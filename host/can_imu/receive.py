@@ -11,7 +11,7 @@ import socket
 import statistics
 import struct
 import time
-from protocol import DATA, STATUS, SYNC_REPLY, SYNC_REQUEST, EFF, ERR, FRAME, Decoder, ClockMap
+from protocol import DATA, STATUS, SYNC_REPLY, SYNC_REQUEST, EFF, ERR, FRAME, Decoder, ClockMap, socket_filters
 
 
 def percentile(values, q):
@@ -37,7 +37,7 @@ def main():
     # Count socket queue drops independently of cumulative interface statistics.
     s.setsockopt(socket.SOL_SOCKET,40,1)  # SO_RXQ_OVFL
     if not args.observe_bus:
-        s.setsockopt(socket.SOL_CAN_RAW,socket.CAN_RAW_FILTER,b''.join(struct.pack('=II',base,0xFFFFFFF8) for base in (DATA,STATUS,SYNC_REPLY)))
+        s.setsockopt(socket.SOL_CAN_RAW,socket.CAN_RAW_FILTER,socket_filters())
     s.bind((args.interface,)); s.setblocking(False)
     decoder,clock=Decoder(),ClockMap()
     frames=collections.Counter(); bits_min=bits_max=0; pending={}; sync_seq=0

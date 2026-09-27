@@ -15,6 +15,13 @@ FRAME = struct.Struct('=IB3x8s')
 SAMPLE = struct.Struct('<Q6fIHHhBBHH')
 
 
+def socket_filters():
+    # CAN_ERR_FLAG in a Linux filter mask selects the error-frame receive list.
+    # Match standard data frames only; leave the three fragment-index bits free.
+    mask = EFF | RTR | 0x7F8
+    return b''.join(struct.pack('=II', base, mask) for base in (DATA, STATUS, SYNC_REPLY))
+
+
 def crc(base, seq, payload):
     return binascii.crc_hqx(struct.pack('<IH', base, seq) + payload, 0xFFFF)
 

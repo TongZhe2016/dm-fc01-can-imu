@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu
 from std_msgs.msg import String
-from .protocol import DATA, STATUS, SYNC_REPLY, SYNC_REQUEST, EFF, FRAME, Decoder, ClockMap
+from .protocol import SYNC_REQUEST, FRAME, Decoder, ClockMap, socket_filters
 
 
 class CanImuNode(Node):
@@ -23,8 +23,7 @@ class CanImuNode(Node):
         fcntl.flock(self.lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         self.sock=socket.socket(socket.AF_CAN,socket.SOCK_RAW,socket.CAN_RAW)
         self.sock.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,1<<20)
-        self.sock.setsockopt(socket.SOL_CAN_RAW,socket.CAN_RAW_FILTER,
-                            b''.join(struct.pack('=II',base,0xFFFFFFF8) for base in (DATA,STATUS,SYNC_REPLY)))
+        self.sock.setsockopt(socket.SOL_CAN_RAW,socket.CAN_RAW_FILTER,socket_filters())
         self.sock.bind((iface,));self.sock.setblocking(False)
         self.decoder=Decoder();self.mapping=ClockMap();self.requests={};self.seq=0
         self.last_rx=None;self.status=None;self.identity=None;self.clock_pair=None;self.reason='waiting_for_data'
