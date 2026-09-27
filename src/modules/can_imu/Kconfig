@@ -1,0 +1,3 @@
+menuconfig MODULES_CAN_IMU
+	bool "can_imu"
+	default n

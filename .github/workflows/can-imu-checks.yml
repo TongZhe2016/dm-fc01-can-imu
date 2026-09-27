@@ -1,0 +1,22 @@
+name: CAN IMU offline checks
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'host/can_imu/**'
+      - 'src/modules/can_imu/**'
+      - '.github/workflows/can-imu-checks.yml'
+  pull_request:
+    paths:
+      - 'host/can_imu/**'
+      - 'src/modules/can_imu/**'
+permissions:
+  contents: read
+jobs:
+  protocol-and-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: PYTHONPATH=host/can_imu python3 -m unittest discover -s host/can_imu/tests -v
+      - run: g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined -Isrc/modules/can_imu host/can_imu/tests/core_test.cpp -o /tmp/can-imu-core-test
+      - run: /tmp/can-imu-core-test

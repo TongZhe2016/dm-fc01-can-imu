@@ -178,6 +178,7 @@ public:
 	void handleRxInterrupt(uavcan::uint8_t fifo_index);
 
 	void handleBusOff();
+	void diagnosticRegisters(uint32_t (&out)[8]) const;
 
 	/**
 	 * This method is used to count errors and abort transmission on error if necessary.
@@ -204,6 +205,7 @@ public:
 	 * May increase continuously if the interface is not connected to the bus.
 	 */
 	virtual uavcan::uint64_t getErrorCount() const;
+	void shutdown();
 
 	/**
 	 * Number of times the driver exercised library's requirement to abort transmission on first error.

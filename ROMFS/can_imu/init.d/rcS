@@ -1,0 +1,19 @@
+#!/bin/sh
+set +e
+set R /
+ver all
+# Bring up maintenance before starting data acquisition.
+cdcacm_autostart start
+sleep 2
+. /etc/init.d/rc.filepaths
+param select $PARAM_FILE
+param import
+param set IMU_GYRO_RATEMAX 2000
+# Driver rotation defines device axes; installation tilt belongs in the external calibration.
+bmi088 -s -b 1 -A -R 4 start
+bmi088 -s -b 1 -G -R 4 start
+icm45686 -s -b 4 -R 4 start
+if param compare CI_AUTOSTART 1
+then
+    can_imu start
+fi

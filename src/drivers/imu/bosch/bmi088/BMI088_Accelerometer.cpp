@@ -192,6 +192,7 @@ void BMI088_Accelerometer::RunImpl()
 		break;
 
 	case STATE::FIFO_READ: {
+			bool timestamp_drdy = false;
 			hrt_abstime timestamp_sample = now;
 			uint8_t samples = 0;
 
@@ -201,6 +202,7 @@ void BMI088_Accelerometer::RunImpl()
 
 				if ((now - drdy_timestamp_sample) < _fifo_empty_interval_us) {
 					timestamp_sample = drdy_timestamp_sample;
+					timestamp_drdy = true;
 					samples = _fifo_samples;
 
 				} else {
@@ -244,7 +246,7 @@ void BMI088_Accelerometer::RunImpl()
 			bool success = false;
 
 			if (samples >= 1) {
-				if (FIFORead(timestamp_sample, samples)) {
+				if (FIFORead(timestamp_sample, samples, timestamp_drdy)) {
 					success = true;
 
 					if (_failure_count > 0) {
@@ -469,7 +471,7 @@ uint16_t BMI088_Accelerometer::FIFOReadCount()
 	return combine(FIFO_LENGTH_1, FIFO_LENGTH_0);
 }
 
-bool BMI088_Accelerometer::FIFORead(const hrt_abstime &timestamp_sample, uint8_t samples)
+bool BMI088_Accelerometer::FIFORead(const hrt_abstime &timestamp_sample, uint8_t samples, bool timestamp_drdy)
 {
 	FIFOTransferBuffer buffer{};
 	const size_t transfer_size = math::min(samples * sizeof(FIFO::DATA) + 4, FIFO::SIZE);
@@ -493,6 +495,7 @@ bool BMI088_Accelerometer::FIFORead(const hrt_abstime &timestamp_sample, uint8_t
 
 	sensor_accel_fifo_s accel{};
 	accel.timestamp_sample = timestamp_sample;
+	accel.timestamp_source = timestamp_drdy ? 1 : 2;
 	accel.samples = 0;
 	accel.dt = FIFO_SAMPLE_DT;
 

@@ -96,7 +96,7 @@ private:
 	void RegisterSetAndClearBits(Register reg, uint8_t setbits, uint8_t clearbits);
 
 	uint16_t FIFOReadCount();
-	bool FIFORead(const hrt_abstime &timestamp_sample, uint8_t samples);
+	bool FIFORead(const hrt_abstime &timestamp_sample, uint8_t samples, bool timestamp_drdy);
 	void FIFOReset();
 
 	void UpdateTemperature();

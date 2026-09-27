@@ -211,6 +211,8 @@ void CdcAcmAutostart::state_connecting()
 		return;
 	}
 
+
+#if defined(CONFIG_MODULES_MAVLINK)
 	if (_sys_usb_auto.get() == 2) {
 		PX4_INFO("Starting mavlink on %s (SYS_USB_AUTO=2)", USB_DEVICE_PATH);
 
@@ -232,6 +234,8 @@ void CdcAcmAutostart::state_connecting()
 		return;
 	}
 
+
+#endif // CONFIG_MODULES_MAVLINK
 	// Otherwise autodetect
 
 	if ((px4_ioctl(_ttyacm_fd, FIONREAD, &bytes_available) != PX4_OK) ||
@@ -279,6 +283,8 @@ void CdcAcmAutostart::state_connecting()
 		return;
 	}
 
+
+#if defined(CONFIG_MODULES_MAVLINK)
 	// Parse for mavlink heartbeats (v1 and v2).
 	if (scan_buffer_for_mavlink_heartbeat()) {
 		if (start_mavlink()) {
@@ -293,6 +299,8 @@ void CdcAcmAutostart::state_connecting()
 		return;
 	}
 
+
+#endif // CONFIG_MODULES_MAVLINK
 	// Parse for carriage returns indicating someone is trying to use the nsh.
 	if (scan_buffer_for_carriage_returns()) {
 		if (start_nsh()) {

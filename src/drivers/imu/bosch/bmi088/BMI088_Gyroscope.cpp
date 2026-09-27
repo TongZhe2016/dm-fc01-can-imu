@@ -169,6 +169,7 @@ void BMI088_Gyroscope::RunImpl()
 		break;
 
 	case STATE::FIFO_READ: {
+			bool timestamp_drdy = false;
 			hrt_abstime timestamp_sample = 0;
 
 			if (_data_ready_interrupt_enabled) {
@@ -177,6 +178,7 @@ void BMI088_Gyroscope::RunImpl()
 
 				if ((now - drdy_timestamp_sample) < _fifo_empty_interval_us) {
 					timestamp_sample = drdy_timestamp_sample;
+					timestamp_drdy = true;
 
 				} else {
 					perf_count(_drdy_missed_perf);
@@ -219,7 +221,7 @@ void BMI088_Gyroscope::RunImpl()
 						samples--;
 					}
 
-					if (FIFORead((timestamp_sample == 0) ? now : timestamp_sample, samples)) {
+					if (FIFORead((timestamp_sample == 0) ? now : timestamp_sample, samples, timestamp_drdy)) {
 						success = true;
 
 						if (_failure_count > 0) {
@@ -410,7 +412,7 @@ void BMI088_Gyroscope::RegisterSetAndClearBits(Register reg, uint8_t setbits, ui
 	}
 }
 
-bool BMI088_Gyroscope::FIFORead(const hrt_abstime &timestamp_sample, uint8_t samples)
+bool BMI088_Gyroscope::FIFORead(const hrt_abstime &timestamp_sample, uint8_t samples, bool timestamp_drdy)
 {
 	FIFOTransferBuffer buffer{};
 	const size_t transfer_size = math::min(samples * sizeof(FIFO::DATA) + 1, FIFO::SIZE);
@@ -422,6 +424,7 @@ bool BMI088_Gyroscope::FIFORead(const hrt_abstime &timestamp_sample, uint8_t sam
 
 	sensor_gyro_fifo_s gyro{};
 	gyro.timestamp_sample = timestamp_sample;
+	gyro.timestamp_source = timestamp_drdy ? 1 : 2;
 	gyro.samples = samples;
 	gyro.dt = FIFO_SAMPLE_DT;
 

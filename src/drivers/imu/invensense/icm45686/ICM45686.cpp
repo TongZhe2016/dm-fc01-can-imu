@@ -507,6 +507,7 @@ void ICM45686::ProcessAccel(const hrt_abstime &timestamp_sample, const FIFO::DAT
 {
 	sensor_accel_fifo_s accel{};
 	accel.timestamp_sample = timestamp_sample;
+	accel.timestamp_source = 2;
 	accel.samples = 0;
 
 	// 19-bits of accelerometer data
@@ -619,6 +620,7 @@ void ICM45686::ProcessGyro(const hrt_abstime &timestamp_sample, const FIFO::DATA
 {
 	sensor_gyro_fifo_s gyro{};
 	gyro.timestamp_sample = timestamp_sample;
+	gyro.timestamp_source = 2;
 	gyro.samples = 0;
 
 	// 20-bits of gyroscope data
