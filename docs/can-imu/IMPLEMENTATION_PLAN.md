@@ -1,68 +1,68 @@
-# DM-FC01 CAN IMU 组成与实现
+# DM-FC01 CAN IMU Architecture and Implementation
 
-固件由传感器驱动、六轴处理、CAN 传输和主机接收工具组成。实机结果见 [VALIDATION.md](VALIDATION.md)，使用和构建入口见 [README](../../README.md)。
+The firmware consists of sensor drivers, six-axis processing, CAN transport, and host receiver tools. See [VALIDATION.md](VALIDATION.md) for hardware results and the [README](../../README.md) for usage and build instructions.
 
-## 硬件与平台
+## Hardware and Platform
 
-MCU 为 STM32H743VIH6。保留厂商 PX4/NuttX 板级支持，基线提交 `b3d0fad488ac158d7af8cafb5de2b4ef8bc162b3`。构建目标为 `damiao_dm-fc01_imu`，板上运行采样、CAN 输出和 USB 维护任务。
+The MCU is an STM32H743VIH6. The firmware retains the vendor's PX4/NuttX board support, based on commit `b3d0fad488ac158d7af8cafb5de2b4ef8bc162b3`. The build target is `damiao_dm-fc01_imu`; the board runs sampling, CAN output, and USB maintenance tasks.
 
-硬件事实核对自厂商《DM-FCO1 飞控板使用说明书 V1.1（2026-08-28）》、开发手册、引脚表和 CubeMX 工程，并与本仓库板级源码比较。
+Hardware details were checked against the vendor's DM-FCO1 Flight Controller User Manual V1.1 (2026-08-28), development manual, pin table, and CubeMX project, and compared with the board-level source in this repository.
 
-| 部件 | 接线 | 用途 |
+| Component | Wiring | Purpose |
 |---|---|---|
-| BMI088 加速度计 | SPI1，CS PA2，DRDY PA0 | 主流加速度 |
-| BMI088 陀螺仪 | SPI1，CS PA3，DRDY PA1 | 主流角速度 |
-| ICM45686 | SPI4，CS PC13，DRDY PE4 | 独立诊断源 |
-| CAN1 | RX PD0，TX PD1 | 经典 1 Mbps 共线数据与对时 |
-| USB | PA11/PA12，VBUS PA15 | NSH 维护、刷写、诊断 |
-| 加热器 | BMI088 PD14，ICM45686 PD15 | 可选温控，默认关闭 |
+| BMI088 accelerometer | SPI1, CS PA2, DRDY PA0 | Primary acceleration stream |
+| BMI088 gyroscope | SPI1, CS PA3, DRDY PA1 | Primary angular-velocity stream |
+| ICM45686 | SPI4, CS PC13, DRDY PE4 | Independent diagnostic source |
+| CAN1 | RX PD0, TX PD1 | Shared-bus data and clock synchronization over classic CAN at 1 Mbps |
+| USB | PA11/PA12, VBUS PA15 | NSH maintenance, flashing, and diagnostics |
+| Heaters | BMI088 PD14, ICM45686 PD15 | Optional temperature control, disabled by default |
 
-CAN1 为唯一 CAN 接口，4-pin SH1.0 的 1/2/3/4 脚分别为 GND/VBAT/CAN_H/CAN_L；第 2 脚是电池电压。引脚表中 ICM 的另一组 PA4/PE2 项与 PDF/板级代码不一致，当前实现采用 PC13/PE4，已读取到实际传感器。
+CAN1 is the only CAN interface. Pins 1/2/3/4 of the 4-pin SH1.0 connector are GND/VBAT/CAN_H/CAN_L; pin 2 carries battery voltage. Another ICM entry in the pin table lists PA4/PE2, conflicting with the PDF and board-level code. The current implementation uses PC13/PE4 and has successfully read the physical sensor.
 
-厂商启动脚本使用 `-R 4`（YAW180），部分说明文字称 PITCH180；当前保留经实机读取的固定驱动旋转。IMU→动捕外参需通过实物逐轴确认；输出保留实际安装倾角。
+The vendor startup script uses `-R 4` (YAW180), while some descriptive text says PITCH180. The current implementation retains the fixed driver rotation used in hardware readings. Verify IMU-to-motion-capture extrinsics physically, one axis at a time. Output preserves the actual mounting tilt.
 
-## 板上应用
+## Onboard Application
 
-`ROMFS/can_imu/init.d/rcS` 先启动 USB，加载参数，设置高速 FIFO，启动两颗 IMU；`CI_AUTOSTART=1` 时启动 CAN 模块。首次配置默认 0，完成 ID 与线路核对后开启并保存。
+`ROMFS/can_imu/init.d/rcS` starts USB, loads parameters, configures high-rate FIFOs, and starts both IMUs. It starts the CAN module when `CI_AUTOSTART=1`. The initial default is 0; enable and save it after checking IDs and wiring.
 
-`src/modules/can_imu/CanImu.cpp` 独立消费加速度/陀螺 FIFO，模块通过 device_id 识别传感器类型。uORB 队列深度 16，并统计更新丢失。
+`src/modules/can_imu/CanImu.cpp` independently consumes accelerometer and gyroscope FIFOs and identifies sensor types by device_id. The uORB queue depth is 16, and lost updates are counted.
 
-数据处理：原始整数乘驱动 scale → 减逐轴偏置/温度斜率补偿 → 逐轴比例 → 两级一阶低通 → 公共 5 ms 时间网格的窗口积分平均。输出加速度比力（m/s²）、角速度（rad/s），保留传感器坐标系下的重力响应。
+Processing chain: raw integers multiplied by the driver scale → subtraction of per-axis bias and temperature-slope compensation → per-axis scaling → two first-order low-pass stages → window-integrated averaging on a common 5 ms time grid. Output is acceleration specific force (m/s²) and angular velocity (rad/s), preserving the gravity response in the sensor coordinate frame.
 
-每级低通默认 60 Hz，组合 −3 dB 频率约 38.6 Hz，低频群延迟约 5.3 ms；5 ms 窗口另有 2.5 ms 中心延迟。时间戳标记窗口末端，EKF 时间对齐需计入上述滤波和窗口延迟。
+Each low-pass stage defaults to 60 Hz, giving a combined −3 dB frequency of approximately 38.6 Hz and low-frequency group delay of approximately 5.3 ms. The 5 ms window adds 2.5 ms of window-center delay. Timestamps mark the window end; EKF time alignment must account for both filtering and window delays.
 
-缺口超过三倍原始周期时，模块丢弃覆盖不完整的窗口。倒序样本忽略并计数，幅值裁剪和轮询/未知时间戳通过质量位报告。
+When a gap exceeds three raw sample periods, the module discards windows with incomplete coverage. Samples with out-of-order timestamps are ignored and counted. Amplitude clipping and polling/unknown timestamps are reported through quality flags.
 
-## 时间与双 IMU
+## Timing and Dual IMUs
 
-64 位时间戳来自 MCU 启动后的单调微秒时钟，每次上电重新计时。每次流模块启动前递增并保存 boot/session，主机按 session 切换时间映射。
+The 64-bit timestamp comes from the MCU's monotonic microsecond clock since boot, which restarts on each power-up. Before each stream-module start, boot/session is incremented and saved. The host switches clock mappings by session.
 
-BMI088 使用真实 DRDY 时间戳时标为有效；回退轮询时置质量位。ICM 当前驱动轮询 FIFO，未恢复严格的逐样本硬件时间关系，因此只作为诊断源。双 IMU 融合的前提是完成 ICM 计时恢复，以及两颗 IMU 的轴系、偏置、杆臂和噪声标定。
+BMI088 timestamps are marked valid when they use actual DRDY timestamps; polling fallback sets a quality flag. The current ICM driver polls the FIFO without reconstructing exact per-sample hardware timing, so ICM remains a diagnostic source. Dual-IMU fusion requires ICM timing reconstruction and calibration of both IMUs' axes, biases, lever arms, and noise.
 
-电脑以 10 Hz 请求对时，使用四个软件打点拟合 MCU→主机单调时钟，之后转换为 ROS 时钟。过期或 ROS 时钟跳变会使映射失效。对时采用软件打点，绝对同步精度仍需独立测量；打点位置见[协议](PROTOCOL.md)。
+The host requests synchronization at 10 Hz and uses four software timestamps to fit an MCU-to-host-monotonic-clock mapping, then converts to the ROS clock. Expiration or a ROS clock jump invalidates the mapping. Absolute accuracy of this software synchronization still requires independent measurement. See the [Protocol](PROTOCOL.md) for timestamp locations.
 
-## CAN 传输
+## CAN Transport
 
-H7 FDCAN 驱动负责过滤、收发、超时清理和关闭流程。模块初始化驱动时钟，并提供控制器寄存器查询。
+The H7 FDCAN driver handles filtering, transmission, reception, timeout cleanup, and shutdown. The module initializes the driver clock and provides controller-register queries.
 
-样本 48 字节，8 个 DLC8 标准帧；每片带序号，整包 CRC 覆盖 baseID、序号和负载。另有 1 Hz 状态和 10 Hz 对时。32 个发送槽，3 ms 帧截止时间，过期清理。标准 ID 分配见 [PROTOCOL.md](PROTOCOL.md)，与电机 ID 1–4、参数 ID 0x7FF 分离。
+Each 48-byte sample uses 8 standard DLC 8 frames. Every fragment carries a sequence number; the packet CRC covers baseID, sequence number, and payload. Additional traffic consists of 1 Hz status and 10 Hz synchronization. There are 32 transmit slots with a 3 ms frame deadline and expired-frame cleanup. See [PROTOCOL.md](PROTOCOL.md) for standard ID allocation, separate from motor IDs 1–4 and parameter ID 0x7FF.
 
-主机重组限 32 个未完成包、20 ms 超时，检查 CRC、会话、序号、时间递增和有限数值。共线电机接收端按 ENCOS ID 范围过滤，再交给电机解析器。
+Host reassembly allows at most 32 incomplete packets with a 20 ms timeout, checking CRC, session, sequence number, increasing timestamps, and finite values. The shared-bus motor receiver filters by the ENCOS ID range before forwarding frames to the motor parser.
 
-## 主机与 ROS
+## Host and ROS
 
-`host/can_imu/` 包含协议库、接收/统计、USB 查询、应用刷写和标定工具；接收仅依赖 Python 标准库，USB 使用 pyserial。USB 工具通过 NSH 控制台查询和配置设备。
+`host/can_imu/` contains the protocol library, receiver/statistics tools, USB queries, application flashing, and calibration tools. Reception uses only the Python standard library; USB uses pyserial. USB tools query and configure the device through the NSH console.
 
-`ros2/fc_clamp_can_imu` 安装同一份协议实现，发布 `/ee_imu/raw`、`/ee_imu/data` 和诊断。正式数据默认要求时间同步、完整样本、未裁剪、真实采样时间及标定有效；温稳可额外要求。姿态协方差首项为 −1，六轴协方差为 0，分别表示姿态不可用和协方差未知。
+`ros2/fc_clamp_can_imu` installs the same protocol implementation and publishes `/ee_imu/raw`, `/ee_imu/data`, and diagnostics. By default, the primary data topic requires clock synchronization, complete samples, no clipping, actual sampling timestamps, and valid calibration. Temperature stability can also be required. The first orientation covariance entry is −1 and the six-axis covariance is 0, indicating unavailable orientation and unknown covariance, respectively.
 
-USB 维护进程共用硬件互斥锁，时间同步进程有独立单实例锁。主项目的 ROS 工作区通过符号链接引用本仓库包。
+USB maintenance processes share a hardware mutex; synchronization processes use a separate single-instance lock. The parent project's ROS workspace references this repository's package through a symbolic link.
 
-## 标定与温控
+## Calibration and Temperature Control
 
-每颗 IMU 独立保存加速度/陀螺三轴偏置、比例和相对 48°C 温度斜率，默认偏置/斜率为零、比例为一、标定标记无效。陀螺静置和加速度六面工具生成待检查的参数命令；完成标定和残差验收后设置标定有效位。
+Each IMU independently stores three-axis accelerometer and gyroscope biases, scales, and temperature slopes relative to 48°C. Defaults are zero bias/slope, unit scale, and invalid calibration flags. The stationary-gyroscope and six-face accelerometer tools generate parameter commands for review. Set calibration-valid flags after calibration and residual validation.
 
-可选加热器各自使用 PI、60% 最大占空比、200 ms 温度陈旧检测、60°C 过温与五分钟升温超时锁存。停止模块关闭两路加热器。加热器默认关闭，启用前需完成实物热测试和故障注入验证。
+Each optional heater uses PI control, a maximum 60% duty cycle, 200 ms stale-temperature detection, and latched faults for 60°C overtemperature and a five-minute warm-up timeout. Stopping the module disables both heaters. Heaters are disabled by default; complete physical thermal tests and fault-injection validation before enabling them.
 
-## 验收与接入
+## Validation and Integration
 
-离线协议/积分测试、USB 刷写、传感器读取、静止共线观察和两轮有界电机对照已完成。连续流和 ROS 实流测试结果见 [VALIDATION.md](VALIDATION.md)，源码裁剪的构建结果见 [SOURCE_LAYOUT.md](SOURCE_LAYOUT.md)。六面标定、外参、动态延迟和 EKF 接入是后续现场工作。
+Offline protocol/integration tests, USB flashing, sensor readings, stationary shared-bus observation, and two bounded motor comparison runs are complete. See [VALIDATION.md](VALIDATION.md) for continuous-stream and live ROS-stream results, and [SOURCE_LAYOUT.md](SOURCE_LAYOUT.md) for build results after source trimming. Six-face calibration, extrinsics, dynamic delay, and EKF integration remain future hardware work.

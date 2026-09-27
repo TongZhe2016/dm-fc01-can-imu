@@ -1,81 +1,81 @@
-# DM-FC01 CAN IMU 实机验收
+# DM-FC01 CAN IMU Hardware Validation
 
-测试日期：2026-09-27。硬件 STM32H743VI rev V，BMI088 + ICM45686，CAN1 经典 1 Mbps，四个 ENCOS 电机 ID 1–4。主机为 Jetson，原生 SocketCAN can0。固件目标 `damiao_dm-fc01_imu`，board ID 7140。
+Test date: 2026-09-27. Hardware: STM32H743VI rev V, BMI088 + ICM45686, CAN1 classic CAN at 1 Mbps, and four ENCOS motors with IDs 1–4. Host: Jetson with native SocketCAN can0. Firmware target: `damiao_dm-fc01_imu`, board ID 7140.
 
-## 验收概况
+## Validation Overview
 
-- USB 应用自动重启进入 bootloader、擦除、写入、校验成功；未修改 bootloader。
-- BMI088 加速度 FIFO 1600 Hz、陀螺 FIFO 2000 Hz，主流重采样至 200 Hz；共线对照期间无 SPI 传输错误、溢出、DRDY missed 或有效流缺口；诊断压力测试见“诊断压力与调度修复”。
-- 标准帧状态输出与 35 秒完整流均通过关节静止监视。7009 个样本，流内 199.99965 Hz、所有 flags=1、零缺样，关节最大漂移小于 0.004°。40 秒观察窗口包含显式启动/停止静默，不能把窗口平均 175.21 Hz 当作流频率。
-- 四轴参考姿态 [90,0,0,0] 已写入并读回；J4 断线修复后四轴身份核对通过。
-- 两轮相同的 10 动作低速基线均 complete，0.5 rpm、每段 0.5 秒、150 Hz 控制；单轮约 30 秒运动、约 34 秒总线观察。保持原速度环 KP=0.006、KI=0.04999，结束后恢复确认，四轴电流为零。
+- USB application reboot into the bootloader, erase, write, and verification succeeded. The bootloader was unchanged.
+- BMI088 accelerometer FIFO ran at 1600 Hz and gyroscope FIFO at 2000 Hz, with the primary stream resampled to 200 Hz. During the shared-bus comparison, there were no SPI transfer errors, overflows, missed DRDY events, or gaps in the valid stream. See “Diagnostic Stress and Scheduling Fix” for diagnostic stress testing.
+- Standard-frame status output and a 35-second full stream both passed joint-stationarity monitoring: 7009 samples, 199.99965 Hz within the stream, all flags=1, no missing samples, and maximum joint drift below 0.004°. The 40-second observation window included explicit startup/shutdown silence; its 175.21 Hz window average is not the stream frequency.
+- The four-axis reference pose [90,0,0,0] was written and read back. All four identities were verified after repairing the J4 disconnection.
+- Two identical 10-action low-speed baseline runs both reached complete: 0.5 rpm, 0.5 seconds per segment, and 150 Hz control. Each run included approximately 30 seconds of motion and 34 seconds of bus observation. The original speed-loop gains KP=0.006 and KI=0.04999 were preserved, restoration was confirmed afterward, and all four motor currents were zero.
 
-## CAN 共线对照
+## Shared CAN Bus Comparison
 
-| 指标 | 关闭 IMU 主流 | 200 Hz IMU 主流 |
+| Metric | IMU primary stream disabled | 200 Hz IMU primary stream |
 |---|---:|---:|
-| 估计总线利用率下界 | 18.67% | 35.99% |
-| 保守位填充上界 | 22.59% | 43.66% |
-| 电机反馈延迟 P50 | 3.3185 ms | 3.5140 ms |
-| 电机反馈延迟 P99 | 4.881 ms | 5.203 ms |
-| 电机反馈延迟最大值 | 11.247 ms | 10.946 ms |
-| 电机反馈记录 | 16440 | 15864 |
-| 过期反馈 / CAN 错误 / 安全事件 | 0 / 0 / 0 | 0 / 0 / 0 |
-| IMU 样本 | — | 6805 |
-| IMU 接收频率 | — | 199.9919 Hz |
-| IMU 缺样 / socket 丢包 | — / 0 | 0 / 0 |
-| IMU 到达间隔 P99 / 最大 | — | 6.479 / 6.864 ms |
-| IMU 映射后样本年龄 P99 / 最大 | — | 6.580 / 6.965 ms |
+| Estimated bus-utilization lower bound | 18.67% | 35.99% |
+| Conservative bit-stuffing upper bound | 22.59% | 43.66% |
+| Motor feedback latency P50 | 3.3185 ms | 3.5140 ms |
+| Motor feedback latency P99 | 4.881 ms | 5.203 ms |
+| Maximum motor feedback latency | 11.247 ms | 10.946 ms |
+| Motor feedback records | 16440 | 15864 |
+| Stale feedback / CAN errors / safety events | 0 / 0 / 0 | 0 / 0 / 0 |
+| IMU samples | — | 6805 |
+| IMU reception frequency | — | 199.9919 Hz |
+| Missing IMU samples / socket drops | — / 0 | 0 / 0 |
+| IMU arrival interval P99 / maximum | — | 6.479 / 6.864 ms |
+| IMU sample age after clock mapping, P99 / maximum | — | 6.580 / 6.965 ms |
 
-利用率由观察到的标准帧长度和 CAN 位填充上下界计算，包含独立同步请求，不是示波器实测。关闭主流时仍有 1 Hz 状态和 10 Hz 对时。反馈延迟来自控制周期起点到驱动记录的接收时刻，包含顺序查询和主机调度，不是单帧物理传输时间。最大反馈延迟两轮都曾超过一个 6.67 ms 周期；本次无 stale，但不据此承诺硬实时截止时间。
+Utilization is calculated from observed standard-frame lengths and CAN bit-stuffing bounds, including independent synchronization requests; it was not measured with an oscilloscope. With the primary stream disabled, 1 Hz status and 10 Hz synchronization remain active. Feedback latency runs from the start of the control cycle to the reception time recorded by the driver, including sequential queries and host scheduling; it is not the physical transmission time of one frame. Maximum feedback latency exceeded one 6.67 ms cycle in both runs. No stale feedback occurred, but this does not establish a hard real-time deadline guarantee.
 
-结论：**对于已测的四电机 150 Hz 控制 + 200 Hz IMU，1 Mbps 有足够带宽余量。** 更高电机频率、额外节点和不同报文格式需要重新测试。本试验的验收对象是共享总线的通信能力。
+Conclusion: **1 Mbps provides sufficient bandwidth headroom for the tested four-motor 150 Hz control loop plus a 200 Hz IMU stream.** Higher motor rates, additional nodes, and different frame formats require retesting. This experiment validates communication capacity on the shared bus.
 
-两轮相对参考姿态的最大角度分别约 J1=3.58°、J2=3.45°、J3=4.79°、J4=2.27°。测试范围还受到实测起始位置 ±4° 配置和既有高度、失联、电流、温度保护约束。
+Maximum angles relative to the reference pose across the two runs were approximately J1=3.58°, J2=3.45°, J3=4.79°, and J4=2.27°. The test range was also constrained by the configured ±4° limits around measured starting positions and existing height, lost-link, current, and temperature protections.
 
-## 诊断压力与调度修复
+## Diagnostic Stress and Scheduling Fix
 
-第一轮连续采集在 1111.8 秒后停止，222362 个样本、1 个缺样；该缺口与 `top once` 的设备时刻 1314.945 秒重合，板上同时增加 FIFO 丢更新 6、窗口不完整 1、两路源缺口 1/2，CAN 错误和 socket 丢包为零。这一轮不计为零缺样通过。
+The first continuous recording stopped after 1111.8 seconds with 222362 samples and 1 missing sample. The gap coincided with `top once` at device time 1314.945 seconds. Onboard counters increased by 6 lost FIFO updates, 1 incomplete window, and 1/2 gaps for the two sources; CAN errors and socket drops remained zero. This run did not pass the zero-missing-sample criterion.
 
-原模块优先级 235 低于 top 的 237，已改为 245，仍低于 SPI 工作队列的 250/253；随后 120 秒采集含 30 次 `top once`，23999 个样本、零缺样、零 FIFO 丢更新/源缺口/CAN 错误/socket 丢包，采样间隔 P99 6.148 ms、最大 10.890 ms。修复后长测结果如下。
+The module's original priority of 235 was below top's 237. It was raised to 245, still below the SPI work queues at 250/253. A subsequent 120-second recording included 30 `top once` calls and received 23999 samples, with no missing samples, lost FIFO updates, source gaps, CAN errors, or socket drops. The sample interval P99 was 6.148 ms and the maximum was 10.890 ms. The long-duration result after the fix follows.
 
-## 30 分钟连续采集
+## 30-Minute Continuous Recording
 
-正式版本连续采集 1800.002 秒，359995 个样本、199.9970 Hz，序列缺样 0、socket 丢包 0、CAN 错误 0、FIFO 丢更新 0、两路源缺口 0；incomplete 从初始 10 到结束仍为 10。到达间隔 P99 6.286 ms、最大 13.125 ms；映射后样本年龄 P99 6.665 ms、最大 14.129 ms。期间包含 5 次 `top once`。
+The release version recorded continuously for 1800.002 seconds: 359995 samples at 199.9970 Hz, with 0 sequence-detected missing samples, 0 socket drops, 0 CAN errors, 0 lost FIFO updates, and 0 gaps for either source. The incomplete counter remained at its initial value of 10. Arrival interval P99 was 6.286 ms, maximum 13.125 ms; sample age after clock mapping had P99 6.665 ms and maximum 14.129 ms. The run included 5 `top once` calls.
 
-这轮原计划为被动长测，但用户中途要求暂停时，对话中断使停止操作未执行，接收/IMU 对时进程继续到原定 30 分钟结束，覆盖了用户自行操作电机的时段。观察到每个电机 ID 各 164250 帧，以及 8 帧 0x7FF；采集程序没有发送电机控制命令。这是混合活动条件下的 IMU 连续性记录，不是固定电机控制负载试验，也不是静态噪声测量；带宽结论采用前述两轮受控对照。该暂停执行偏差已向用户说明。
+This run was originally planned as passive endurance testing. When the user requested a pause partway through, a conversation interruption prevented the stop operation from executing. The receiver/IMU synchronization process continued until the scheduled 30-minute end, covering a period when the user operated the motors independently. The recording observed 164250 frames for each motor ID and 8 frames with ID 0x7FF; the recording program sent no motor-control commands. This is an IMU continuity record under mixed activity, not a fixed motor-control-load experiment or a stationary-noise measurement. The bandwidth conclusion uses the two controlled comparison runs above. This failure to execute the pause was explained to the user.
 
-双传感器和 200 Hz CAN 同时运行时，`top once` 的一次快照显示 CPU idle 59.11%、IMU 模块约 4.96%、SPI1 约 13.77%、SPI4 约 21.62%；这不是最坏情况执行时间测量。
+With both sensors and 200 Hz CAN running, one `top once` snapshot showed CPU idle at 59.11%, the IMU module at approximately 4.96%, SPI1 at approximately 13.77%, and SPI4 at approximately 21.62%. This was not a worst-case execution-time measurement.
 
-## ROS 接收
+## ROS Reception
 
-ROS 包独立构建和无数据启动检查已通过。真实流测试发现并修复了 Linux SocketCAN 掩码包含 CAN_ERR_FLAG 而被分配到错误帧接收列表的问题；CLI/ROS 共用标准帧掩码 `0xC00007F8`。过滤模式 10 秒收到 2000 个样本、零缺样。
+The ROS package passed a standalone build and startup check without data. Live-stream testing found and fixed a Linux SocketCAN mask issue: including CAN_ERR_FLAG assigned the socket to the error-frame receive list. CLI and ROS now share the standard-frame mask `0xC00007F8`. Filtered reception received 2000 samples in 10 seconds with no missing samples.
 
-ROS 默认标定门控 20 秒收到 raw=3986、data=0，状态 calibration_required，消息元数据正确。显式 `require_calibration:=false` 的纯传输复测 20 秒收到 raw=3929、data=3928，节点解码零缺样，状态 ready；订阅端样本年龄 P99 8.183 ms、最大 9.051 ms。
+With the default ROS calibration gate, a 20-second run received raw=3986 and data=0, with status calibration_required and correct message metadata. A transport-only retest explicitly setting `require_calibration:=false` received raw=3929 and data=3928 in 20 seconds, with no missing samples in the node's decoded stream and status ready. Subscriber-side sample age had P99 8.183 ms and maximum 9.051 ms.
 
-DDS 使用 best-effort，订阅数量受发现时间和交付影响，不能把它当作 CAN 缺样数。
+DDS uses best-effort delivery. Subscriber counts depend on discovery timing and delivery and cannot be treated as CAN missing-sample counts.
 
-## 恢复后的复核
+## Follow-Up Check After Resumption
 
-用户结束自行调试并授权继续后，另完成 60.000 秒只接收/对时复核：11999 个样本、199.9827 Hz、零序列缺样/socket 丢包/CAN 错误/FIFO 丢更新，incomplete 保持 10；样本年龄 P99 6.220 ms、最大 10.359 ms。USB 读回版本不变，BMI088 加速度/陀螺均无 bad transfer、FIFO overflow、DRDY missed。测试结束后采集/对时进程正常退出，板上保持自启主流。
+After the user finished independent debugging and authorized continuation, a further 60.000-second reception/synchronization-only check received 11999 samples at 199.9827 Hz, with no sequence gaps, socket drops, CAN errors, or lost FIFO updates. The incomplete counter remained at 10. Sample age had P99 6.220 ms and maximum 10.359 ms. USB readback confirmed the same version; neither BMI088 accelerometer nor gyroscope showed bad transfers, FIFO overflows, or missed DRDY events. The recording/synchronization process exited normally after the test, and the board retained the autostart primary stream.
 
-## 固件版本与计数基线
+## Firmware Version and Counter Baseline
 
-正式刷入固件提交 `ccb8a2ceb839e991c985c3d62bfbfed263eebca6`，`.px4` SHA-256 `771b89faef9085256b17f0a5186c3e3c6e985dfd87aa7bf2dd45e3a9cbe22dea`。已持久化 `CI_AUTOSTART=1`，刷写重启后自动启动，USB 读回版本和参数一致。自动启动后首次读取时 incomplete=10，具体启动瞬态未完整抓取；后续采集以此基线观察增量；boot=27。ICM 轮询时间回退仍存在，保持诊断用途。
+The flashed release firmware was commit `ccb8a2ceb839e991c985c3d62bfbfed263eebca6`, with `.px4` SHA-256 `771b89faef9085256b17f0a5186c3e3c6e985dfd87aa7bf2dd45e3a9cbe22dea`. `CI_AUTOSTART=1` was persisted, and the application started automatically after flashing and rebooting. USB version and parameter readback matched. The first read after autostart showed incomplete=10; the startup transient was not fully captured. Subsequent recordings measured increments from this baseline; boot=27. ICM polling-time fallback remains, so ICM continues to serve diagnostic use.
 
-## 驱动修复与现场异常
+## Driver Fixes and Hardware Incident
 
-修复了厂商 H7 CAN 过滤器地址错误和初始化等待问题，补充 CAN 关闭生命周期及独立驱动时钟初始化，使断线发送截止时间生效。共享电机驱动增加 ENCOS ID 范围过滤；此前会把 IMU 0x6A0 标准帧误报为“电机 1696 故障”。回归测试确认其他设备帧被忽略，真正电机故障仍停止。
+The vendor H7 CAN filter-address error and initialization-wait issue were fixed. CAN shutdown lifecycle handling and standalone driver-clock initialization were added, allowing transmission deadlines to take effect when disconnected. The shared motor driver gained ENCOS ID-range filtering; previously, it misreported IMU standard frame 0x6A0 as a “motor 1696 fault.” Regression tests confirmed that other-device frames are ignored while genuine motor faults still trigger a stop.
 
-现场曾发生 J4 异常转动并拉断线缆（用户最初称 J3，后更正）。转动过程未被观察，原因未确定；不能认定由 IMU 扩展帧导致。旧扩展 ID 试验流停用，当前标准帧通过上述静止和有界运动共线测试。早期过程见 [BRINGUP_HISTORY.md](BRINGUP_HISTORY.md)。
+J4 once rotated unexpectedly and pulled a cable apart (the user initially identified J3, then corrected it). The motion was not observed, and its cause remains undetermined; it cannot be attributed to IMU extended frames. The old extended-ID test stream was disabled. The current standard frames passed the stationary and bounded-motion shared-bus tests above. See [BRINGUP_HISTORY.md](BRINGUP_HISTORY.md) for the early debugging history.
 
-## 后续验收
+## Remaining Validation
 
-待完成：物理六面/逐轴方向及动捕外参验收、完整加速度/陀螺标定、绝对时钟同步精度、滤波动态延迟测量、加热器热测试/故障注入、ICM 精确 FIFO 时间恢复及双 IMU 融合、EE EKF 集成。主流标定标记仍为未标定，ROS 默认 `/ee_imu/data` 受标定门控；`/ee_imu/raw` 提供诊断数据。输出保留实际安装倾角和重力响应。
+Pending work: physical six-face/per-axis orientation and motion-capture extrinsics validation; full accelerometer/gyroscope calibration; absolute clock-synchronization accuracy; filter dynamic-delay measurements; heater thermal tests and fault injection; exact ICM FIFO timing reconstruction and dual-IMU fusion; and EE EKF integration. The primary stream remains marked uncalibrated, so the default ROS `/ee_imu/data` topic is calibration-gated; `/ee_imu/raw` provides diagnostic data. Output preserves the actual mounting tilt and gravity response.
 
-## 可重现检查
+## Reproducible Checks
 
-独立仓库根目录执行：
+Run from the standalone repository root:
 
 ```bash
 PYTHONPATH=host/can_imu python3 -m unittest discover -s host/can_imu/tests -v
@@ -87,15 +87,15 @@ bash -n ROMFS/can_imu/init.d/rcS
 make damiao_dm-fc01_imu -j4 PYTHON_EXECUTABLE=/path/to/build-env/bin/python
 ```
 
-结果：7 个协议测试通过，C++ ASan/UBSan 核心检查通过，独立固件全量编译通过。共享电机驱动重建后 9 个原生传输测试通过，包括共线帧误报回归。模拟动作流程完成；模拟低速响应不能用于调参评分，实机两轮基线本身均完成。
+Results: all 7 protocol tests passed, C++ ASan/UBSan core checks passed, and the standalone firmware passed a full build. After rebuilding the shared motor driver, all 9 native transport tests passed, including the regression for false faults from shared-bus frames. The simulated motion workflow completed; its low-speed response could not be used for tuning scores. Both hardware baseline runs completed.
 
-## 本机记录
+## Local Records
 
-原始日志、固件和设备参数保存在验收主机：
+Raw logs, firmware, and device parameters are stored on the validation host:
 
-- `.omx/artifacts/dm-fc01-imu/standard-stream-guarded/`、`standard-endurance-30min/`（修复前）、`priority-diagnostic-stress/`、`release-endurance-30min/`（修复后）、`resumed-final-check/`。
-- 同目录 `flash-release.log`、`release-ccb8a2ceb8.px4`、`release-ccb8a2ceb8.manifest.json`、`release-parameters.json`、`ros-gated-result.json`、`ros-transport-result.json`。
-- `~/.local/state/aerial-arm-motor-autotune/imu-can-20260927/motor-off-20260927_153000/`。
-- 同目录 `motor-on-20260927_153139/`、`can-comparison.json`、`reference-calibration-live-20260927_151708.json`、`session.json`。
+- `.omx/artifacts/dm-fc01-imu/standard-stream-guarded/`, `standard-endurance-30min/` (before the fix), `priority-diagnostic-stress/`, `release-endurance-30min/` (after the fix), and `resumed-final-check/`.
+- In the same directory: `flash-release.log`, `release-ccb8a2ceb8.px4`, `release-ccb8a2ceb8.manifest.json`, `release-parameters.json`, `ros-gated-result.json`, and `ros-transport-result.json`.
+- `~/.local/state/aerial-arm-motor-autotune/imu-can-20260927/motor-off-20260927_153000/`.
+- In the same directory: `motor-on-20260927_153139/`, `can-comparison.json`, `reference-calibration-live-20260927_151708.json`, and `session.json`.
 
-运动使用主项目 `agent.sh baseline --live --fixture-ready --anchors ... --config bounded-repaired.yaml --max-evaluations 1 --max-duration-s 300 --log-frames`，精确命令在每轮 `command.json`。采集使用 `host/can_imu/receive.py --sync --observe-bus`。全局累积 RX dropped 不作为本轮丢包证据，使用采集 socket 溢出和序列缺样计数。
+Motion used the parent project's `agent.sh baseline --live --fixture-ready --anchors ... --config bounded-repaired.yaml --max-evaluations 1 --max-duration-s 300 --log-frames`; the exact command is stored in each run's `command.json`. Recording used `host/can_imu/receive.py --sync --observe-bus`. Global cumulative RX dropped counts are not evidence of drops in a particular run; use recording-socket overflow and sequence-gap counters.

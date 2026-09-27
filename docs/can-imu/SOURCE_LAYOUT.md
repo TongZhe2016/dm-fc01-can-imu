@@ -1,41 +1,41 @@
-# CAN IMU 源码与构建
+# CAN IMU Source Layout and Build
 
-支持目标：`damiao_dm-fc01_imu`，STM32H743 + BMI088 + ICM45686。入口为 `make`；可以通过 `BUILD_DIR`、`JOBS` 和 `PYTHON_EXECUTABLE` 指定构建目录、并行度及 Python 环境。
+Supported target: `damiao_dm-fc01_imu`, STM32H743 + BMI088 + ICM45686. Use `make` as the build entry point. Set `BUILD_DIR`, `JOBS`, and `PYTHON_EXECUTABLE` to select the build directory, parallelism, and Python environment.
 
-## 目录
+## Directories
 
-| 路径 | 用途 |
+| Path | Purpose |
 |---|---|
-| `src/modules/can_imu` | 六轴处理、窗口时间戳、CAN 分片、设备对时、参数及可选温控 |
-| `src/drivers/imu` | BMI088 与 ICM45686 SPI/FIFO 驱动 |
-| `src/drivers/uavcan` | STM32H7 CAN 硬件后端及所需传输接口、时钟类型 |
-| `src/drivers/cdcacm_autostart`、`src/systemcmds` | USB 控制台、刷写入口和运行诊断 |
-| `src/lib`、`src/include` | 参数持久化、事件、容器、传感器封装和数学基础 |
-| `boards/damiao/dm-fc01` | 本板 GPIO、SPI、USB、启动和链接配置 |
-| `platforms/common`、`platforms/nuttx` | 任务调度、uORB、计时及 STM32H7 平台适配 |
-| `msg` | 本固件使用的 10 个消息定义 |
-| `ROMFS/can_imu` | 应用启动脚本 |
-| `Tools`、`cmake` | 消息/参数生成、固件打包及 USB 上传工具 |
-| `host/can_imu`、`ros2` | CAN 接收、对时、标定辅助、USB 维护、ROS 2 适配与测试 |
-| `docs/can-imu` | 协议、构建、实机验收和维护记录 |
+| `src/modules/can_imu` | Six-axis processing, window timestamps, CAN fragmentation, device clock synchronization, parameters, and optional temperature control |
+| `src/drivers/imu` | BMI088 and ICM45686 SPI/FIFO drivers |
+| `src/drivers/uavcan` | STM32H7 CAN hardware backend, required transport interfaces, and clock types |
+| `src/drivers/cdcacm_autostart`, `src/systemcmds` | USB console, flashing entry point, and runtime diagnostics |
+| `src/lib`, `src/include` | Parameter persistence, events, containers, sensor wrappers, and math primitives |
+| `boards/damiao/dm-fc01` | Board GPIO, SPI, USB, startup, and linker configuration |
+| `platforms/common`, `platforms/nuttx` | Task scheduling, uORB, timing, and STM32H7 platform support |
+| `msg` | The 10 message definitions used by this firmware |
+| `ROMFS/can_imu` | Application startup scripts |
+| `Tools`, `cmake` | Message/parameter generation, firmware packaging, and USB upload tools |
+| `host/can_imu`, `ros2` | CAN reception, clock synchronization, calibration helpers, USB maintenance, ROS 2 integration, and tests |
+| `docs/can-imu` | Protocol, build, hardware validation, and maintenance records |
 
-## 基础依赖
+## Core Dependencies
 
-四个子模块分别为 NuttX 内核、NuttX 应用支持、libevents 和 heatshrink。提交号由 gitlink 固定。它们保留上游源码包，具体组件由本目标配置选择；目录统计应将这些依赖与主仓库分别计算。NuttX 提供 MCU 启动、中断、线程、USB、文件系统及基础驱动，构建通过其配置系统选择所需组件。
+The four submodules are the NuttX kernel, NuttX application support, libevents, and heatshrink. Their commits are pinned by gitlinks. They retain their upstream source distributions, with components selected by this target's configuration. Count these dependencies separately from the main repository when reporting directory statistics. NuttX provides MCU startup, interrupts, threads, USB, filesystems, and basic drivers; its configuration system selects the required build components.
 
-CAN 后端取自厂商提供的 libuavcan/STM32H7 驱动，保留许可证和源码版权标记。当前传输接口直接使用微秒时间类型；本地时间类型的运算由 `host/can_imu/tests/transport_time_test.cpp` 验证。
+The CAN backend comes from the vendor-provided libuavcan/STM32H7 driver, with license and source copyright notices retained. The current transport interface uses microsecond time types directly. Operations on the local time types are verified by `host/can_imu/tests/transport_time_test.cpp`.
 
-## 裁剪基线
+## Source-Trimming Baseline
 
-裁剪比较基线为提交 `c59e32f56b`。主仓库原有 13,236 个文件、384,780,845 字节；裁剪后约 734 个文件、4.1 MB。统计排除 Git 历史、构建产物和子模块内部文件。
+Commit `c59e32f56b` is the comparison baseline. The main repository originally contained 13,236 files totaling 384,780,845 bytes; after trimming, it contains approximately 734 files totaling 4.1 MB. These counts exclude Git history, build outputs, and files inside submodules.
 
-源码删除包括飞行控制/导航/估计算法、其他板型、仿真和训练资源，以及不属于本构建的驱动、消息和开发工具。构建入口、参数生成和固件内元数据也随目标收敛。现有协议、传感器旋转、滤波与窗口时间戳语义见 [PROTOCOL.md](PROTOCOL.md) 和 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)。
+Removed sources include flight-control, navigation, and estimation algorithms; other boards; simulation and training resources; and drivers, messages, and development tools outside this build. Build entry points, parameter generation, and firmware metadata were also narrowed to this target. See [PROTOCOL.md](PROTOCOL.md) and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the existing protocol, sensor rotations, filtering, and window-timestamp semantics.
 
-Git 历史保留基线和硬件验收版本。首次获取可使用 `git clone --depth 1`；浅克隆仍需按 README 初始化四个依赖。
+Git history retains the baseline and hardware-validated versions. Use `git clone --depth 1` for an initial shallow checkout if desired; initialize the four dependencies as described in the README even for a shallow clone.
 
-## 验证
+## Verification
 
-使用全新的 `build/imu-clean-final` 目录执行：
+Run the following with a fresh `build/imu-clean-final` directory:
 
 ```bash
 make BUILD_DIR=build/imu-clean-final JOBS=4 PYTHON_EXECUTABLE=/path/to/build-env/bin/python
@@ -52,14 +52,14 @@ python3 -m compileall -q host/can_imu ros2/fc_clamp_can_imu
 bash -n ROMFS/can_imu/init.d/rcS
 ```
 
-全新构建目录和独立浅克隆均完整编译通过，生成 board ID 7140 的 `.px4` 应用包。浅克隆的依赖从本机同提交镜像初始化。
+Full builds passed both in a fresh build directory and in a standalone shallow clone, producing `.px4` application packages with board ID 7140. The shallow clone's dependencies were initialized from local mirrors at the same commits.
 
-| 构建版本 | 应用镜像大小 |
+| Build version | Application image size |
 |---|---:|
-| 本地空目录构建 | 256,364 字节 |
-| 提交 `324c2b2ebd` 的浅克隆构建 | 256,380 字节 |
-| 裁剪前已刷入版本 | 298,436 字节 |
+| Local build in an empty directory | 256,364 bytes |
+| Shallow-clone build of commit `324c2b2ebd` | 256,380 bytes |
+| Flashed version before source trimming | 298,436 bytes |
 
-两个裁剪版镜像均约 256 KB，包含各自的版本元数据。协议 7 项测试、C++ ASan/UBSan 核心检查和 CAN 时间类型检查已通过。
+Both trimmed images are approximately 256 KB and contain their respective version metadata. All 7 protocol tests, the C++ ASan/UBSan core checks, and the CAN time-type checks passed.
 
-源码裁剪产物待刷入验证。实机结果对应 [VALIDATION.md](VALIDATION.md) 中记录的已刷入版本。
+The trimmed-source build awaits flashing and hardware validation. Hardware results apply to the flashed version recorded in [VALIDATION.md](VALIDATION.md).

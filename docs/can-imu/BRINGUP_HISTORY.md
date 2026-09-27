@@ -1,53 +1,53 @@
-# 早期调试记录（历史状态）
+# Early Bring-Up Record (Historical State)
 
-本页归档 2026-09-27 从首次刷写到四轴参考标定的过程，保留当时的故障、判断、命令和后续计划。各节状态均对应记录时点。最终测试结果见 [VALIDATION.md](VALIDATION.md)，现行操作入口见 [README](../../README.md)。
+This page archives the work on 2026-09-27 from the first flash through four-axis reference calibration, preserving the faults, assessments, commands, and follow-up plans recorded at the time. Each section reflects its recording time. See [VALIDATION.md](VALIDATION.md) for final test results and the [README](../../README.md) for current operating instructions.
 
-历史命令使用迁移前的目录，仅供追溯。
+Historical commands use paths from before the repository migration and are retained for traceability.
 
-## 首轮实现与 USB 失联
+## Initial Implementation and Loss of USB Connectivity
 
-日期：2026-09-27。该阶段已完成软件实现与离线检查，USB 失联阻塞了实机调试，固件和电机共线验收待恢复后进行。
+Date: 2026-09-27. Software implementation and offline checks were complete at this stage. Loss of USB connectivity blocked hardware debugging; firmware and shared-bus motor validation awaited recovery.
 
-### 阶段结果
+### Results at This Stage
 
-| 项目 | 证据与结果 |
+| Item | Evidence and result |
 |---|---|
-| 原板识别 | DM-FC01，STM32H743 rev V，board ID7140；原应用hash `a4ad2fc346a543271cfc2c17a4baa21f14eb5f79`，PX4 1.16.1 |
-| 参数备份 | 1019个已使用参数；浮点来自MAVLink binary32，整数以同时保存的NSH文本核对。MAVLink伪参数 `_HASH_CHECK` 排除；最后的 `WV_YRATE_MAX=90` 由NSH补齐。备份在本机artifact目录 |
-| 专用应用构建 | ARM GCC13.2.1、NuttX12.12.0；最终候选board ID7140，image_size297196，最大1835008字节；成功链接和打包 |
-| 最新候选SHA256 | `f64931f64aeba30a67b796e1c4feec0815d5f7675f0e78abaf46a64cbd1000c9`；此候选尚未刷写/实机验证 |
-| USB软件进入bootloader | 四次开发镜像均完成擦写、编程、CRC校验；未按Boot、未改写bootloader。bootloader `PX4BLv1.16.1g99ad4703c9` |
-| USB读取传感器 | 第三次镜像：BMI088 accel FIFO625us/1600Hz、gyro500us/2000Hz；寄存器/传输/溢出/漏DRDY计数均0，初始化reset1；ICM45686之前读取正常 |
-| CAN过滤器缺陷定位 | 首次应用重启循环，硬故障PC解析到厂商 `CanIface::configureFilters`。原实现错误地把寄存器偏移OR掩码作为CPU地址；已改用message RAM地址，并修正mask、FIFO路由和数量字段 |
-| CAN启动后续 | 第三次应用返回 `CAN filter failed`，没有有效CAN IMU样本；之后调整INIT等待为有界等待并补充停止时中断清理，这些改动仍待实机验证 |
-| 当前硬件阻塞 | 第四次应用刷写校验成功后USB枚举失败；主机日志 `device descriptor read/64, error -110`、`device not accepting address, error -71`。只复位对应USB端口未恢复。该次启动脚本未自动启动CAN，不能据此把USB故障归因于CAN过滤器 |
-| 协议离线 | 6个Python unittest通过：CRC参考、乱序/重复、丢片/超时/CRC错误、序号回绕/重启/旧会话、丢样/内存上界、时钟漂移/失效 |
-| C++处理核心 | g++启用ASan/UBSan通过：不同ODR共同窗口、均值、缺口拒绝、逆序时间戳、裁剪、跨语言CRC向量 |
-| ROS 2 | `fc_clamp_can_imu` colcon构建成功；独立domain173运行5秒并以SIGINT结束，无异常输出；没有真实样本，因此未验证ROS数据频率和延迟 |
-| 电机前检 | 只读inspect成功，四电机ID1–4、静止、原参数已记录。此前plan和新的局部范围plan均 `live_motion_ready=true` |
-| 电机模拟 | 0.5rpm，配置软范围按前检位置±4°，保持原高度/通信/故障保护；完成一次10组动作的采集及释放/参数恢复。调参评分因一个模拟关节未达到90%响应而判基准不可用；这不是实机带宽结论 |
-| 测试工具修复 | 失败拟合的inf/NaN记录为JSON null且保留hard_fail，报告支持null；新增单测通过，模拟报告可重新生成 |
-| 实机电机运动 | **未执行**。用户已确认现场条件、允许各关节当前位置±5°低速测试；授权持续有效，恢复后需重新只读检查当前位置与占用者 |
+| Original board identification | DM-FC01, STM32H743 rev V, board ID 7140; original application hash `a4ad2fc346a543271cfc2c17a4baa21f14eb5f79`, PX4 1.16.1 |
+| Parameter backup | 1019 used parameters; floating-point values came from MAVLink binary32, and integers were checked against NSH text saved at the same time. The MAVLink pseudo-parameter `_HASH_CHECK` was excluded; the final `WV_YRATE_MAX=90` was recovered from NSH. Backups are in the local artifact directory |
+| Dedicated application build | ARM GCC 13.2.1, NuttX 12.12.0; final candidate board ID 7140, image_size 297196, maximum 1835008 bytes; linking and packaging succeeded |
+| Latest candidate SHA256 | `f64931f64aeba30a67b796e1c4feec0815d5f7675f0e78abaf46a64cbd1000c9`; this candidate had not yet been flashed or validated on hardware |
+| Software entry into bootloader over USB | All four development images completed erase, programming, and CRC verification, without pressing Boot or rewriting the bootloader. Bootloader: `PX4BLv1.16.1g99ad4703c9` |
+| Sensor readings over USB | Third image: BMI088 accel FIFO 625 us/1600 Hz, gyro 500 us/2000 Hz; register/transfer/overflow/missed-DRDY counters all 0, initialization reset count 1; ICM45686 readings had previously worked |
+| CAN filter defect identified | The first application entered a reboot loop; the hard-fault PC resolved to the vendor's `CanIface::configureFilters`. The original implementation incorrectly used a register offset ORed with a mask as a CPU address. It was changed to use the message RAM address, with mask, FIFO routing, and count fields also corrected |
+| Subsequent CAN startup | The third application returned `CAN filter failed`, with no valid CAN IMU samples. INIT waiting was then bounded, and interrupt cleanup on stop was added; these changes still awaited hardware validation |
+| Current hardware blocker | USB enumeration failed after the fourth application was flashed and verified. Host logs showed `device descriptor read/64, error -110` and `device not accepting address, error -71`. Resetting only the corresponding USB port did not recover it. This startup script did not autostart CAN, so the USB fault could not be attributed to the CAN filter on that basis |
+| Offline protocol checks | 6 Python unittests passed: CRC reference, out-of-order/duplicate fragments, missing fragments/timeouts/CRC errors, sequence wraparound/restart/old sessions, missing samples/memory bounds, and clock drift/invalidation |
+| C++ processing core | Passed with g++ ASan/UBSan: common windows across different ODRs, means, gap rejection, reversed timestamps, clipping, and cross-language CRC vectors |
+| ROS 2 | `fc_clamp_can_imu` built successfully with colcon; ran for 5 seconds in isolated domain 173 and ended with SIGINT, with no error output. No real samples were available, so ROS data rate and latency were not validated |
+| Motor precheck | Read-only inspect succeeded: four stationary motors with IDs 1–4, original parameters recorded. Both the earlier plan and the new locally bounded plan reported `live_motion_ready=true` |
+| Motor simulation | 0.5 rpm, soft limits configured at precheck positions ±4°, with existing height/communication/fault protections retained. One set of 10 actions completed recording, release, and parameter restoration. The tuning score rejected the baseline because one simulated joint failed to reach 90% response; this was not a hardware bandwidth result |
+| Test-tool fix | Failed fits now record inf/NaN as JSON null while retaining hard_fail; reports support null. The new unit test passed, and the simulation report could be regenerated |
+| Hardware motor motion | **Not executed.** The user had confirmed site conditions and authorized low-speed tests within ±5° of each joint's current position. That authorization remained in effect; after recovery, current positions and device ownership required another read-only check |
 
-### 本机证据
+### Local Evidence
 
-主目录：`/home/airman/FC-CLAMP_Real_Drone/.omx/artifacts/dm-fc01-imu/`。
+Main directory: `/home/airman/FC-CLAMP_Real_Drone/.omx/artifacts/dm-fc01-imu/`.
 
-- `preflash.json`、`factory-parameters.json`：原板、传感器和参数。
-- `flash-01.log` 至 `flash-04.log`：四次应用刷写记录。
-- `postflash-02.json`：硬故障日志、传感器和USB诊断。
-- `postflash-03.json`：1600/2000Hz读取状态及CAN启动错误。
-- `can-03/summary.json`：30秒未收到任何IMU样本；不得作为通过验收的记录。
-- `candidate.px4`、`candidate-manifest.json`：最新未验证候选。
-- `usb-rescue.px4`：只自动启动USB的恢复诊断镜像；尚未成功刷入。
-- `recovery-watch.log`：等待实物复位后刷写诊断镜像的有界程序日志。
-- `ros-smoke.log`：ROS适配进程smoke，无数据。
+- `preflash.json`, `factory-parameters.json`: original board, sensors, and parameters.
+- `flash-01.log` through `flash-04.log`: four application-flashing records.
+- `postflash-02.json`: hard-fault logs, sensor diagnostics, and USB diagnostics.
+- `postflash-03.json`: 1600/2000 Hz readout status and CAN startup errors.
+- `can-03/summary.json`: no IMU samples received in 30 seconds; not a passing validation record.
+- `candidate.px4`, `candidate-manifest.json`: latest unvalidated candidate.
+- `usb-rescue.px4`: recovery diagnostic image that autostarts only USB; not yet successfully flashed.
+- `recovery-watch.log`: bounded recovery-program log while waiting for a physical reset to flash the diagnostic image.
+- `ros-smoke.log`: ROS adapter process smoke check, without data.
 
-电机任务记录：`/home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/session.json`；配置 `bounded.yaml`，模拟记录 `simulate/*/summary.json`。最初实机只读检查在相邻 `imu-can-20260927-inspect` 目录。
+Motor task record: `/home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/session.json`; configuration: `bounded.yaml`; simulation records: `simulate/*/summary.json`. The initial read-only hardware check is in the adjacent `imu-can-20260927-inspect` directory.
 
-### 当时执行的检查命令
+### Check Commands Executed at the Time
 
-在仓库根目录：
+From the repository root:
 
 ```bash
 PYTHONPATH=real_drone/can_imu python3 -m unittest discover -s real_drone/can_imu/tests -v
@@ -67,65 +67,65 @@ sh real_drone/aerial_arm_motor_autotune/agent.sh baseline --simulate \
   --output /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/simulate
 ```
 
-在 `real_drone/aerial_arm_motor_autotune`：
+From `real_drone/aerial_arm_motor_autotune`:
 
 ```bash
 PYTHONPATH=tests .venv/bin/python -m unittest test_trace_nonfinite -v
 ```
 
-ROS构建命令见README，smoke为加载install环境后：
+See the README for the ROS build command. After sourcing the install environment, the smoke check was:
 
 ```bash
 ROS_DOMAIN_ID=173 timeout --signal=INT 5 ros2 run fc_clamp_can_imu can_imu_node
 ```
 
-退出124来自有界timeout；节点没有报错。只运行ROS适配进程，不代表有IMU数据或EKF验收。
+Exit code 124 came from the bounded timeout; the node reported no errors. Running the ROS adapter process alone did not establish IMU data reception or EKF validation.
 
-### 当时的恢复计划
+### Recovery Plan at the Time
 
-1. 捕获现场RESET/完整断电上电后的bootloader，刷 `usb-rescue.px4`，确认USB稳定。
-2. 逐步加载参数、单颗传感器、高速FIFO，再手动启动CAN；保存每一步USB状态与主机枚举日志，定位当前USB故障。
-3. 检查扩展帧过滤、收发、CRC、对时、停止/重启与boot session；完整有效200Hz后再刷自动启动候选。
-4. 单板连续30分钟，记录有效率/缺样/最长间断/延迟，不用平均频率掩盖断流。逐路热测试和校准另行记录。
-5. 实机只读重检、重新核对当前位置±5°范围；两个有界电机批次（每批最多300秒）：关闭IMU主流的基线、打开主流的对照。保持同一运动配置和原参数，采集全总线帧、错误计数差值、电机回复与IMU延迟。
-6. 根据上下界负载及电机超时/反馈延迟判定1Mbit/s能否满足当前150Hz控制与200Hz IMU。该阶段尚无带宽验收结论。
+1. Catch the bootloader after an on-site RESET/full power cycle, flash `usb-rescue.px4`, and confirm stable USB operation.
+2. Load parameters, one sensor, and high-rate FIFOs incrementally, then start CAN manually. Save USB status and host enumeration logs at each step to locate the USB fault.
+3. Check extended-frame filtering, transmission/reception, CRC, synchronization, stop/restart, and boot sessions. Flash the autostart candidate only after achieving a complete, valid 200 Hz stream.
+4. Run the board continuously for 30 minutes, recording valid-sample rate, missing samples, longest interruption, and latency. Do not use average frequency to hide interruptions. Record each heater's thermal tests and calibration separately.
+5. Repeat read-only hardware checks and verify the ±5° range around current positions. Run two bounded motor batches, each at most 300 seconds: a baseline with the IMU primary stream disabled and a comparison with it enabled. Keep the same motion configuration and original parameters, recording all bus frames, error-counter deltas, motor replies, and IMU latency.
+6. Use load bounds, motor timeouts, and feedback latency to determine whether 1 Mbit/s supports the current 150 Hz control loop and 200 Hz IMU stream. No bandwidth validation conclusion was available at this stage.
 
-未验证项还包括：六面/逐轴方向、外参、陀螺和加速度校准、绝对同步精度、滤波动态延迟、USB拔插独立运行、拥塞/bus-off恢复、温控故障注入，以及EE EKF接入。ICM的精确采样时间恢复与双IMU融合未实施。
+Other unvalidated items included six-face/per-axis orientation, extrinsics, gyroscope and accelerometer calibration, absolute synchronization accuracy, filter dynamic delay, standalone operation across USB disconnect/reconnect, congestion/bus-off recovery, temperature-control fault injection, and EE EKF integration. Exact ICM sampling-time reconstruction and dual-IMU fusion had not been implemented.
 
-## 仓库迁移计划（当时状态）
+## Repository Migration Plan (State at the Time)
 
-用户要求在固件工作完成后，将相关实现统一交付到 `git@github.com:TongZhe2016/dm-fc01-can-imu.git`，主项目以 `real_drone/dm-fc01-can-imu` 子模块引用。2026-09-27 已通过 SSH 查询该远程，访问成功，查询时没有已发布分支。
+The user requested delivery of the related implementation to `git@github.com:TongZhe2016/dm-fc01-can-imu.git` after firmware work was complete, with the parent project referencing it as the `real_drone/dm-fc01-can-imu` submodule. An SSH query on 2026-09-27 succeeded; the remote had no published branches at the time of the query.
 
-迁移范围包括固件及必要构建依赖、主机接收/USB维护工具、ROS适配、测试、README、协议/标定/构建恢复文档和验收记录。主项目仅保留必要的集成入口；ROS适配不再通过当前目录布局引用相邻源码。原厂来源和许可证继续保留在独立仓库。生成的日志、虚拟环境、固件二进制和设备参数备份保持本机artifact。
+Migration scope included firmware and required build dependencies, host receiver/USB maintenance tools, ROS integration, tests, the README, protocol/calibration/build-and-recovery documentation, and validation records. The parent project would retain only the necessary integration entry points. ROS integration would no longer reference adjacent source through the existing directory layout. Vendor provenance and licenses would remain in the standalone repository. Generated logs, virtual environments, firmware binaries, and device-parameter backups would remain local artifacts.
 
-迁移验收：从新仓库独立检出，初始化其声明依赖，重新编译并运行离线检查，核对刷写/恢复工具和ROS入口，再推送并登记主项目gitlink。随后删除主项目的 `real_drone/docs/dm-fc01/PX4-Autopilot_dm-fc01`、`real_drone/can_px4` 及对应 `.gitmodules` 登记、本地子模块元数据；同时清理已迁移的重复工具和文档。当前工具仍有两个MAVLink备份辅助脚本依赖旧 `can_px4` 路径，必须先解除这些依赖。
+Migration acceptance required a standalone checkout of the new repository, initialization of declared dependencies, rebuilding and running offline checks, and checking flashing/recovery tools and ROS entry points before pushing and registering the parent project's gitlink. Then remove `real_drone/docs/dm-fc01/PX4-Autopilot_dm-fc01`, `real_drone/can_px4`, their `.gitmodules` entries, and local submodule metadata from the parent project, along with duplicated migrated tools and documents. Two MAVLink backup helper scripts still depended on the old `can_px4` path; those dependencies had to be removed first.
 
-这份计划记录于 USB 恢复阶段，当时尚未删除旧目录或发布仓库。
+This plan was recorded during USB recovery, before the old directories were deleted or the repository published.
 
-## 2026-09-27 整机重启后的复测
+## 2026-09-27 Retest After a Full-System Reboot
 
-主机重启恢复了 USB。诊断版 BMI088 加速度 1600 Hz、陀螺 2000 Hz，SPI 错误、FIFO 溢出和 DRDY missed 为零。启动 CAN 后成功解码 946 个样本，连续有效段约 4.73 秒，随后停止输出；10 秒窗口平均仅 94.59 Hz，不能判为 200 Hz 连续输出通过。保存于本机 `whole-reboot-can/summary.json`。该次现场轴数据波动较大，不能作为静止噪声测试。
+Rebooting the host restored USB. The diagnostic build ran BMI088 acceleration at 1600 Hz and gyroscope at 2000 Hz, with zero SPI errors, FIFO overflows, and missed DRDY events. After CAN startup, 946 samples were decoded successfully over approximately 4.73 seconds of continuous valid data, then output stopped. The 10-second window average was only 94.59 Hz, so this did not pass continuous 200 Hz output validation. Results were saved locally in `whole-reboot-can/summary.json`. Axis readings varied substantially during this run, so it was not a stationary-noise test.
 
-第五次刷写完成并校验成功，自动启动运行。新增寄存器诊断显示 PSR=0x77b（ACK error / error passive）、TXBRP=0xffffffff（发送队列全部等待）。独立模块漏调用驱动时钟初始化，导致发送超时清理不工作；源码已补 `SystemClock::instance()`，第六版已构建，尚待刷入验证。CANerr=0 原先只统计 abort/timeout，不能据此声称总线无物理错误。
+The fifth flash completed and verified successfully, with autostart running. New register diagnostics showed PSR=0x77b (ACK error / error passive) and TXBRP=0xffffffff (all transmit slots pending). The standalone module had omitted driver-clock initialization, preventing transmission-timeout cleanup. `SystemClock::instance()` was added to the source, and the sixth version was built but still awaited flashing and validation. CANerr=0 had previously counted only abort/timeout events and could not establish the absence of physical bus errors.
 
-第六次自动重启进入 bootloader 时，主机 tegra-xusb 再次出现 transfer-event 错误及 USB descriptor -110；该次尚未写入。正在恢复 USB 控制器并核对 CAN 供电。尚未执行电机运动。
+During the sixth automatic reboot into the bootloader, the host's tegra-xusb again reported a transfer-event error and USB descriptor -110; writing had not begun. USB controller recovery and CAN power checks were in progress. Motor motion had not been executed.
 
-第六版随后通过重新绑定主机 `tegra-xusb` 控制器成功枚举、刷入并校验。CAN 驱动时钟初始化修复已生效：断线时持续清理超时发送，队列不再永久锁死；CANerr 计数增加符合发送超时。用户随后确认飞控 CAN 线曾断开并已重新连接；重连后的 30 秒采集仍无 IMU 帧，电机只读 inspect 未完整通过（CAN response timeout），已请现场核对 CAN1 插口。源码和工具已复制到新独立仓库作迁移构建，旧目录未删除、远程未发布。
+The sixth version subsequently enumerated, flashed, and verified successfully after rebinding the host's `tegra-xusb` controller. The CAN driver-clock initialization fix took effect: timed-out transmissions were continuously cleared while disconnected, so the queue no longer remained permanently blocked. The CANerr increase was consistent with transmission timeouts. The user then confirmed that the flight controller CAN cable had been disconnected and reconnected. A 30-second recording after reconnection still received no IMU frames, and read-only motor inspect did not fully pass (CAN response timeout). An on-site CAN1 connector check was requested. Source and tools had been copied into the new standalone repository for migration builds; the old directories had not been deleted and the remote had not been published.
 
-迁移目录独立构建通过：`make -C real_drone/dm-fc01-can-imu damiao_dm-fc01_imu -j4 PYTHON_EXECUTABLE=/home/airman/FC-CLAMP_Real_Drone/.omx/venvs/can-imu-build/bin/python`。新路径下 6 个 Python 协议测试、C++ ASan/UBSan 核心检查通过。ROS 新路径 colcon 构建通过；同步接收器同时运行时节点被独占锁拒绝，停止接收器后单独运行 5 秒正常（timeout 124），但无 IMU 数据。旧目录和远程尚未完成交付清理。
+The migration directory passed a standalone build: `make -C real_drone/dm-fc01-can-imu damiao_dm-fc01_imu -j4 PYTHON_EXECUTABLE=/home/airman/FC-CLAMP_Real_Drone/.omx/venvs/can-imu-build/bin/python`. All 6 Python protocol tests and C++ ASan/UBSan core checks passed at the new path. The ROS colcon build at the new path passed. The node was rejected by the exclusive lock while the synchronization receiver was running; after stopping the receiver, the node ran alone for 5 seconds normally (timeout 124), but without IMU data. Delivery cleanup of the old directories and remote was still pending.
 
-当前维护源码以新目录 `real_drone/dm-fc01-can-imu` 为准；板上是第六版（时钟修复），新目录另将状态输出字段从 sent 改名 queued，避免将入队误解成已送达。固件新目录全量构建通过，但该字段改名版本尚未再次烧录。厂商手册明确只有一个 CAN1 接口，四针为 1 GND、2 VBAT、3 H、4 L。先前询问 CAN2 不适用于本板。电机运动仍为零次；完整验收与最终发布/旧子模块删除待连接恢复后执行。
+The maintained source was now in `real_drone/dm-fc01-can-imu`. The board ran the sixth version (clock fix); the new directory also renamed the status field from sent to queued to distinguish enqueueing from delivery. The firmware passed a full build in the new directory, but the field-renaming version had not been flashed again. The vendor manual specifies only one CAN1 interface, with pins 1 GND, 2 VBAT, 3 H, and 4 L. The earlier question about CAN2 did not apply to this board. No motor-motion experiments had been run; full validation, final publication, and old-submodule removal awaited restored connectivity.
 
-## 实物异常：J4 大角度转动及线缆牵拉
+## Hardware Incident: Large J4 Rotation and Cable Pull
 
-用户报告 J4 曾大角度转动并扯住线缆，随后已解除牵拉、检查接头并摆回 [90,0,0,0]，重新确认可标定。此前没有执行有界运动批次，但这不等于实物没有运动；先前“未执行电机运动”仅指未调用预定运动实验。异常原因未确定。需要排查电机是否误接收扩展帧：旧 IMU ID 低位包含 1–4，厂商电机协议只声明标准帧，尚无其拒绝扩展帧的实证。
+The user reported that J4 had rotated through a large angle and pulled on the cable. The cable tension was then relieved, connectors checked, and the arm returned to [90,0,0,0], with readiness for calibration reconfirmed. No bounded motion batch had been executed, but that did not mean the hardware had remained motionless: earlier statements that motor motion had not been executed referred only to the planned motion experiments. The cause was undetermined. One issue to investigate was whether motors incorrectly accepted extended frames: the low bits of the old IMU IDs included 1–4, the vendor motor protocol specified only standard frames, and there was no empirical evidence that the motors rejected extended frames.
 
-已通过 USB 执行 `can_imu stop`、`param set CI_AUTOSTART 0`、`param save`，确认 not running。在问题排除之前不得恢复旧 ID 的 IMU 共线输出。四电机检查仍超时，尚未写入零点，正在逐电机只读诊断。
+USB commands `can_imu stop`, `param set CI_AUTOSTART 0`, and `param save` were executed, confirming not running. Shared-bus IMU output with the old IDs must not resume until the issue is resolved. The four-motor check still timed out, zero references had not been written, and per-motor read-only diagnostics were in progress.
 
-逐轴只读复查：J1/J2/J3 UUID 与原记录一致，位置约 1.6962/−3.6983/10.2374°，速度绝对值均小于 0.002 rpm、电流均为零。J4 UUID 查询超时。四轴标定尚未执行。源码默认 CI_AUTOSTART 改为 0，当前板已另行保存为 0；既有参数仍会覆盖新固件默认值。
+Per-axis read-only recheck: J1/J2/J3 UUIDs matched the original records, positions were approximately 1.6962/−3.6983/10.2374°, absolute speeds were all below 0.002 rpm, and currents were all zero. The J4 UUID query timed out. Four-axis calibration had not been performed. The source default for CI_AUTOSTART was changed to 0, and 0 was separately saved on the current board; existing parameters still override new firmware defaults.
 
-## 2026-09-27 15:17 四轴参考标定完成
+## 2026-09-27 15:17 Four-Axis Reference Calibration Completed
 
-用户确认修复 J4 断线、整机重新上电并摆至 [90,0,0,0]。USB 检查 can_imu not running，CI_AUTOSTART=0 已保存。四轴身份与原 UUID 一致，静止检查通过。复用共享驱动 `calibrate_reference` 写入参考坐标，逐轴校验后再次完整查询通过：89.999443、0.000387、0.000222、−0.000175°。未发送运动目标，未改变增益；本次尚未通过再次断电验证标定持久化。
+The user confirmed repair of the J4 disconnection, a full-system power cycle, and placement at [90,0,0,0]. USB checks showed can_imu not running and CI_AUTOSTART=0 saved. All four axes matched their original UUIDs and passed stationarity checks. The shared driver's `calibrate_reference` function wrote the reference coordinates. Per-axis verification and a subsequent full query passed: 89.999443, 0.000387, 0.000222, and −0.000175°. No motion targets were sent and gains were unchanged. Calibration persistence had not yet been verified through another power cycle.
 
-命令：`real_drone/aerial_arm_motor_autotune/.venv/bin/python /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/calibrate_reference_run.py`（执行前同一封装 --simulate 通过）。结果保存在该目录 `reference-calibration-live-20260927_151708.json`。最初误用驱动 CLI 读取调参配置时因缺少 control 字段退出，发生在打开硬件之前；随后使用经过 validate 的调参配置及与 UI 相同的维护函数完成标定。IMU CAN 继续关闭，J4 异常运动原因及共线协议隔离尚待排查。
+Command: `real_drone/aerial_arm_motor_autotune/.venv/bin/python /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/calibrate_reference_run.py` (the same wrapper passed --simulate before execution). Results were saved as `reference-calibration-live-20260927_151708.json` in that directory. An initial attempt to read the tuning configuration with the driver CLI exited because the control field was missing, before opening the hardware. Calibration then completed using the validated tuning configuration and the same maintenance function as the UI. IMU CAN remained disabled; the cause of J4's unexpected motion and shared-bus protocol isolation still required investigation.

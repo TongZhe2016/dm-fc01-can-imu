@@ -1,86 +1,86 @@
-# CAN IMU v1 协议
+# CAN IMU v1 Protocol
 
-设备使用经典 CAN、1 Mbit/s、11 位标准数据帧，单节点固定 ID。多节点共线时需统一分配 ID。
+The device uses classic CAN at 1 Mbit/s with 11-bit standard data frames and fixed IDs for a single node. Assign IDs consistently when multiple nodes share a bus.
 
-## 报文与分片
+## Messages and Fragmentation
 
-| 范围 | 内容 | 方向 |
+| Range | Contents | Direction |
 |---|---|---|
-| 0x680–687 | 六轴样本，8片 | 板→主机 |
-| 0x6A0–6A7 | 状态，8片，1 Hz | 板→主机 |
-| 0x6C0 | 对时请求，DLC2，小端序号 | 主机→板 |
-| 0x6B0–6B3 | 对时回复，4片 | 板→主机 |
+| 0x680–687 | Six-axis sample, 8 fragments | Board → host |
+| 0x6A0–6A7 | Status, 8 fragments, 1 Hz | Board → host |
+| 0x6C0 | Synchronization request, DLC 2, little-endian sequence number | Host → board |
+| 0x6B0–6B3 | Synchronization reply, 4 fragments | Board → host |
 
-数据、状态和对时回复均按 DLC 8 分片：前 2 字节为序号，后 6 字节为负载。CAN ID 的低 3 位表示分片索引。
+Data, status, and synchronization replies use DLC 8 fragments: the first 2 bytes contain the sequence number and the remaining 6 bytes contain payload. The low 3 bits of the CAN ID identify the fragment index.
 
-完整包末尾 2 字节为 CRC16/CCITT-FALSE：多项式 0x1021、初值 0xFFFF、无反射、无末异或。CRC 依次覆盖小端 uint32 baseID、小端 uint16 序号和整包除 CRC 外的全部字节。`123456789` 的独立 CRC 为 0x29B1。
+The last 2 bytes of each complete packet contain CRC16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF, no reflection, and no final XOR. The CRC covers, in order, the little-endian uint32 baseID, the little-endian uint16 sequence number, and every packet byte except the CRC itself. The standalone CRC of `123456789` is 0x29B1.
 
-## 六轴样本
+## Six-Axis Sample
 
-样本共 48 字节，所有多字节字段均为小端：
+Each sample is 48 bytes. All multibyte fields are little-endian:
 
-| 偏移 | 类型 | 内容 |
+| Offset | Type | Contents |
 |---|---|---|
-| 0 | uint64 | 窗口末端启动微秒 |
-| 8 | float32[3] | 加速度比力，m/s²，保留重力响应 |
-| 20 | float32[3] | 角速度，rad/s |
+| 0 | uint64 | Window-end time in microseconds since boot |
+| 8 | float32[3] | Acceleration specific force, m/s², preserving the gravity response |
+| 20 | float32[3] | Angular velocity, rad/s |
 | 32 | uint32 | boot/session |
-| 36 | uint16 | 窗口长度5000us |
+| 36 | uint16 | Window duration, 5000 us |
 | 38 | uint16 | flags |
-| 40 | int16 | 温度×100；−32768不可用 |
-| 42 | uint8 | 源0BMI088、1ICM45686 |
-| 43 | uint8 | 协议版本1 |
-| 44 | uint16 | 配置epoch |
+| 40 | int16 | Temperature × 100; −32768 means unavailable |
+| 42 | uint8 | Source: 0 BMI088, 1 ICM45686 |
+| 43 | uint8 | Protocol version 1 |
+| 44 | uint16 | Configuration epoch |
 | 46 | uint16 | CRC |
 
-`flags` 定义如下：
+`flags` are defined as follows:
 
-| 位 | 含义 |
+| Bit | Meaning |
 |---|---|
-| bit0 | 样本完整、有效 |
-| bit1 | 加速度和陀螺标定均有效 |
-| bit2 | 温度保持在目标值 ±1°C 内，连续 10 秒 |
-| bit3 | 窗口使用了轮询或未知时间戳 |
-| bit4 | 发生幅值裁剪，同时清除 bit0 |
-| bit5 | 所选加热器故障 |
+| bit0 | Sample is complete and valid |
+| bit1 | Both accelerometer and gyroscope calibrations are valid |
+| bit2 | Temperature has stayed within ±1°C of the target for 10 consecutive seconds |
+| bit3 | The window used polling or unknown timestamps |
+| bit4 | Amplitude clipping occurred; bit0 is also cleared |
+| bit5 | The selected heater has a fault |
 
-时间质量位沿处理链保留，包括低通和插值。
+Time-quality flags propagate through the processing chain, including low-pass filtering and interpolation.
 
-## 状态与对时
+## Status and Clock Synchronization
 
-状态48字节：`uint64 timestamp; uint32 boot, tx_drop, incomplete, can_errors, orb_lost, gaps_bmi, gaps_icm; int16 temperatures[2]; uint8 source,version; uint16 epoch; uint8 heater_fault_mask,calibrated_mask; uint16 crc`。
+Status is 48 bytes: `uint64 timestamp; uint32 boot, tx_drop, incomplete, can_errors, orb_lost, gaps_bmi, gaps_icm; int16 temperatures[2]; uint8 source,version; uint16 epoch; uint8 heater_fault_mask,calibrated_mask; uint16 crc`.
 
-对时回复共 24 字节：`uint64 t2_us,t3_us; uint32 boot; uint16 version,crc`。设备最多接受 20 Hz 请求，主机默认以 10 Hz 请求。
+A synchronization reply is 24 bytes: `uint64 t2_us,t3_us; uint32 boot; uint16 version,crc`. The device accepts requests at up to 20 Hz; the host requests synchronization at 10 Hz by default.
 
-四个对时时刻分别为：
+The four synchronization timestamps are:
 
-| 时刻 | 记录位置 |
+| Timestamp | Recorded at |
 |---|---|
-| t1 | 主机发送请求 |
-| t2 | 设备底层驱动出队，换算到 hrt 时钟 |
-| t3 | 设备发送回复分片之前 |
-| t4 | 主机收齐回复 |
+| t1 | Host sends the request |
+| t2 | Device low-level driver dequeues the request, converted to the hrt clock |
+| t3 | Device is about to send the reply fragments |
+| t4 | Host receives the complete reply |
 
-四者均为软件打点。主机选用低 RTT 样本拟合仿射时钟映射；连续 1 秒没有成功同步时，映射过期。绝对同步精度需要独立测量。
+All four are software timestamps. The host selects low-RTT samples to fit an affine clock mapping. The mapping expires after 1 second without successful synchronization. Absolute synchronization accuracy requires independent measurement.
 
-## CRC 参考向量
+## CRC Reference Vector
 
-CRC跨语言向量，baseID=0x680、seq=1，timestamp=5000，a=(1,2,3)，g=(0.1,0.2,0.3)，boot=1，dt=5000，flags=1，T=48，source=0，version=1，epoch=1：
+Cross-language CRC vector with baseID=0x680, seq=1, timestamp=5000, a=(1,2,3), g=(0.1,0.2,0.3), boot=1, dt=5000, flags=1, T=48, source=0, version=1, and epoch=1:
 
 ```text
 88130000000000000000803f0000004000004040cdcccc3dcdcc4c3e9a99993e0100000088130100c0120001010020bf
 ```
 
-## 重组与会话
+## Reassembly and Sessions
 
-接收端最多保留 32 个未完成包，重组超时为 20 ms。重复片忽略；分片冲突或 CRC 失败时丢弃整包。只交付当前会话中时间戳递增的样本，序号允许回绕。
+The receiver retains at most 32 incomplete packets, with a 20 ms reassembly timeout. Duplicate fragments are ignored; conflicting fragments or CRC failures cause the entire packet to be discarded. Only samples with increasing timestamps in the current session are delivered. Sequence numbers may wrap around.
 
-设备复位或流会话变化时清空重组状态；ROS 配置变化时清空对时映射。boot 计数保存在参数中，恢复旧参数或手动重置计数可能复用历史会话，此时需同时重启接收进程。
+A device reset or stream session change clears reassembly state; a ROS configuration change clears the clock mapping. The boot counter is stored in parameters. Restoring old parameters or manually resetting the counter may reuse a historical session, in which case the receiver process must also be restarted.
 
-## 发送与带宽
+## Transmission and Bandwidth
 
-分片发送截止时间为 3 ms，底层有 32 个硬件发送槽。过期丢弃计入底层 CAN 错误，入队失败计入 `tx_drop`；接收端在重组超时后丢弃未完成包。
+Fragments have a 3 ms transmission deadline, and the low-level driver has 32 hardware transmit slots. Expired-frame drops count as low-level CAN errors; enqueue failures count toward `tx_drop`. The receiver discards incomplete packets after the reassembly timeout.
 
-200 Hz 主流的预算为 8×200×135≈21.6%，总负载还需计入状态和对时。标准电机 ID 1–4 的仲裁优先级高于 IMU，电机参数 ID 0x7FF 低于 IMU；共线验收需同时检查参数事务延迟。
+The budget for the 200 Hz primary stream is 8×200×135≈21.6%. Total load also includes status and synchronization traffic. Standard motor IDs 1–4 have higher arbitration priority than the IMU; motor parameter ID 0x7FF has lower priority. Shared-bus validation must also check parameter-transaction latency.
 
-接收端只接受上述标准数据帧，过滤扩展帧、RTR 和错误帧。报文布局版本为 1；计算 CRC 时须使用本版标准帧 baseID。
+The receiver accepts only the standard data frames listed above, filtering out extended frames, RTR frames, and error frames. The message layout version is 1; CRC calculation must use this version's standard-frame baseID.
