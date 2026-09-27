@@ -2,6 +2,8 @@
 
 Target hardware: STM32H743, BMI088, and ICM45686. The firmware streams six-axis measurements and device timestamps over classic CAN, with USB configuration, CAN clock synchronization, and ROS 2 receiver tools.
 
+Download the [v0.1.0 precompiled firmware](https://github.com/TongZhe2016/dm-fc01-can-imu/releases/tag/v0.1.0) for DM-FC01 (board ID 7140). Follow [Flash a release](#flash-a-release) to install it, or [Build from source](#build-from-source) to compile your own image.
+
 BMI088 provides the primary 200 Hz stream; ICM45686 is used for diagnostics. Each sample contains three-axis acceleration, three-axis angular velocity, and an MCU timestamp. The host maps device time to the ROS clock through CAN synchronization.
 
 In hardware tests on a shared bus, four motors controlled at 150 Hz plus a 200 Hz IMU stream used approximately 36.0%–43.7% of bus capacity. A 30-minute recording received 359995 samples with no missing samples. The thermal firmware also passed single- and dual-heater tests, PI tuning, and sensor-loss protection checks. The validation board has saved settings for automatic heating at 50°C; see [Temperature control](docs/can-imu/THERMAL_CONTROL.md).
@@ -23,7 +25,30 @@ The timestamp marks the end of the sampling window. EKF time alignment must acco
 
 Output uses the vendor driver's fixed rotation `-R 4`, preserving the gravity response and actual mounting tilt. Verify the IMU-to-motion-capture extrinsics one axis at a time before integration. BMI088 uses DRDY sampling timestamps; polling fallback sets a time-quality flag. Per-sample timing for ICM45686 and dual-IMU fusion still require implementation and validation.
 
-## Build and Flash
+## Flash a release
+
+Download these files from [v0.1.0](https://github.com/TongZhe2016/dm-fc01-can-imu/releases/tag/v0.1.0):
+
+- [damiao_dm-fc01_imu-v0.1.0.px4](https://github.com/TongZhe2016/dm-fc01-can-imu/releases/download/v0.1.0/damiao_dm-fc01_imu-v0.1.0.px4): application firmware.
+- [FLASHING.md](https://github.com/TongZhe2016/dm-fc01-can-imu/releases/download/v0.1.0/FLASHING.md): USB flashing and first-time configuration.
+- [SHA256SUMS](https://github.com/TongZhe2016/dm-fc01-can-imu/releases/download/v0.1.0/SHA256SUMS): file checksums.
+
+On Linux, put the downloads in one directory and run `sha256sum --ignore-missing -c SHA256SUMS` there. The flashing tools require Python 3 and pyserial. Clone the release to obtain the tools:
+
+```bash
+git clone --branch v0.1.0 --depth 1 https://github.com/TongZhe2016/dm-fc01-can-imu.git
+cd dm-fc01-can-imu
+python3 host/can_imu/flash.py /absolute/path/to/damiao_dm-fc01_imu-v0.1.0.px4
+python3 host/can_imu/usb_query.py --plain 'ver all' 'can_imu status'
+```
+
+Connect the DM-FC01 by USB and close programs using its serial port before flashing. The tool uses the board's existing PX4 bootloader and verifies the written application. Use `--port` if the board's serial path differs from the default.
+
+Fresh parameters have module autostart and heating disabled. Follow `FLASHING.md` to enable the CAN stream and 50°C automatic heating, then calibrate your board at operating temperature. Existing boards load their saved settings.
+
+v0.1.0 is a prerelease for bench evaluation. The release notes describe completed tests and the remaining hardware checks.
+
+## Build from source
 
 Build tools: CMake, Ninja, GNU Arm Embedded GCC (tested with 13.2.1), newlib, and genromfs. The Python environment requires kconfiglib, pyelftools, toml, empy 3.3.4, and pyros-genmsg. The host receiver uses the Python standard library; USB tools also require pyserial.
 
