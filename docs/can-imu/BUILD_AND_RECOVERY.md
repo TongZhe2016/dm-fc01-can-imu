@@ -20,7 +20,7 @@ Jetson 主机在软件重启设备时曾报 `tegra-xusb: Transfer event TRB DMA 
 
 ## CAN 诊断
 
-使用 CAN1、经典 CAN 1 Mbps。标准电机帧与扩展 IMU 帧共线。状态中的 `queued` 是完整包入队计数，不能作为总线发送成功计数。`tx_drop` 是入队失败；`CANerr` 包含底层发送超时/abort 事件。寄存器 CCCR、PSR、TXFQS、TXBRP、TXBTO、TXBCF、IR、IE 用于诊断实际控制器状态。
+使用 CAN1、经典 CAN 1 Mbps。电机和 IMU 均使用标准帧，ID 分配见 [PROTOCOL.md](PROTOCOL.md)。状态中的 `queued` 是完整包入队计数，不能作为总线发送成功计数。`tx_drop` 是入队失败；`CANerr` 包含底层发送超时/abort 事件。寄存器 CCCR、PSR、TXFQS、TXBRP、TXBTO、TXBCF、IR、IE 用于诊断实际控制器状态。
 
 本次断线时 PSR=0x77b，最后错误为 ACK error；发送排队并不能证明线路连通。独立模块显式初始化驱动时钟，保证 3 ms 发送截止时间生效，过期帧清理后仍可尝试后续新数据。接收器应报告整个观察窗口的初始/末尾静默时间，不仅报告有数据片段的平均间隔。
 

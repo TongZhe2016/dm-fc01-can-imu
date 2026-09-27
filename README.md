@@ -2,7 +2,7 @@
 
 目标硬件：STM32H743、BMI088、ICM45686。应用基于厂商 PX4/NuttX 板级支持，输出六轴测量，不启动飞行控制或姿态估计模块。
 
-已在 DM-FC01 上完成 USB 应用刷写、200 Hz CAN 输出及四电机共线对照。1 Mbps 总线上，150 Hz 四轴控制加 200 Hz IMU 的估计占用为 **36.0%–43.7%**；本次对照无 IMU 缺样、电机过期反馈或 CAN 错误。测试范围和持续时间见 [验收记录](docs/can-imu/VALIDATION.md)。
+已在 DM-FC01 上完成 USB 应用刷写、200 Hz CAN 输出及四电机共线对照。1 Mbps 总线上，150 Hz 四轴控制加 200 Hz IMU 的估计占用为 **36.0%–43.7%**；本次对照无 IMU 缺样、电机过期反馈或 CAN 错误。修复后的正式版本另完成 30 分钟连续接收，359995 个样本、零缺样。测试范围和持续时间见 [验收记录](docs/can-imu/VALIDATION.md)。
 
 CAN 使用标准帧：样本 `0x680–687`、状态 `0x6A0–6A7`、对时回复 `0x6B0–6B3`、对时请求 `0x6C0`。ENCOS 电机保持 ID 1–4，配置帧为 0x7FF。首次配置默认不自动输出；核对共享总线 ID 后设置 `CI_AUTOSTART=1` 并保存。
 
@@ -21,8 +21,22 @@ CAN 使用标准帧：样本 `0x680–687`、状态 `0x6A0–6A7`、对时回复
 
 当前主机使用 ARM GCC 13.2.1、Ninja、已有 NuttX 子模块，以及本机 `.omx/venvs/can-imu-build` 中的构建期 `pyros-genmsg`。主机接收器使用 Python 标准库；USB 工具使用已有 pyserial。
 
+独立检出并初始化本目标使用的依赖：
+
 ```bash
+git clone git@github.com:TongZhe2016/dm-fc01-can-imu.git
 cd dm-fc01-can-imu
+git submodule update --init --recursive -- \
+  platforms/nuttx/NuttX/apps platforms/nuttx/NuttX/nuttx \
+  src/drivers/uavcan/libdronecan/dsdl \
+  src/drivers/uavcan/libdronecan/libuavcan/dsdl_compiler/pydronecan \
+  src/lib/events/libevents src/lib/heatshrink/heatshrink \
+  src/modules/mavlink/mavlink
+```
+
+MAVLink 子模块用于上游构建元数据；本固件没有启动 MAVLink 通信任务。构建环境还需要 CMake、genromfs、ARM newlib，以及 Python 的 empy 3.3.4、kconfiglib、pyros-genmsg。以下是本次已验证主机的构建命令；换电脑时替换 Python 路径：
+
+```bash
 make damiao_dm-fc01_imu -j4 \
   PYTHON_EXECUTABLE=/home/airman/FC-CLAMP_Real_Drone/.omx/venvs/can-imu-build/bin/python
 ```
@@ -48,7 +62,7 @@ python3 host/can_imu/flash.py \
 python3 host/can_imu/usb_query.py --plain 'can_imu status' 'bmi088 -A status'
 ```
 
-参数在模块启动时读取；更改后 `param save`，再执行 `can_imu stop` 和 `can_imu start`。每次启动递增流会话。已验证 USB 下停止/重启；连续 CAN 恢复仍在验收。
+参数在模块启动时读取；更改后 `param save`，再执行 `can_imu stop` 和 `can_imu start`。每次启动递增流会话。已验证 USB 下停止/重启，以及保存 `CI_AUTOSTART=1` 后刷写重启自动恢复 CAN 主流。当前实物已启用自动启动；新板默认仍为 0。
 
 | 参数 | 含义 |
 |---|---|
