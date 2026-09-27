@@ -71,7 +71,7 @@ J4 once rotated unexpectedly and pulled a cable apart (the user initially identi
 
 ## Remaining Validation
 
-Pending work: physical six-face/per-axis orientation and motion-capture extrinsics validation; full accelerometer/gyroscope calibration; absolute clock-synchronization accuracy; filter dynamic-delay measurements; heater thermal tests and fault injection; exact ICM FIFO timing reconstruction and dual-IMU fusion; and EE EKF integration. The primary stream remains marked uncalibrated, so the default ROS `/ee_imu/data` topic is calibration-gated; `/ee_imu/raw` provides diagnostic data. Output preserves the actual mounting tilt and gravity response.
+Pending work: physical six-face/per-axis orientation and motion-capture extrinsics validation; full accelerometer/gyroscope calibration; absolute clock-synchronization accuracy; filter dynamic-delay measurements; heater cold-start and environmental testing; exact ICM FIFO timing reconstruction and dual-IMU fusion; and EE EKF integration. The primary stream remains marked uncalibrated, so the default ROS `/ee_imu/data` topic is calibration-gated; `/ee_imu/raw` provides diagnostic data. Output preserves the actual mounting tilt and gravity response.
 
 ## Reproducible Checks
 
@@ -102,4 +102,4 @@ Motion used the parent project's `agent.sh baseline --live --fixture-ready --anc
 
 ## Subsequent Thermal Firmware Verification
 
-The revised thermal firmware was flashed and passed bounded single-heater, dual-heater, and sensor-loss protection tests on 2026-09-27. See [THERMAL_CONTROL.md](THERMAL_CONTROL.md) for its exact image identity, results, startup overshoot, remaining environmental/calibration work, and final heater-disabled state. These results supplement the earlier release record above.
+The revised thermal firmware was flashed and passed bounded single-heater, dual-heater, and sensor-loss protection tests on 2026-09-27. See [THERMAL_VALIDATION.md](THERMAL_VALIDATION.md) for image identities, tuning results, fault-injection checks, and saved heater autostart configuration. These results supplement the earlier release record above.

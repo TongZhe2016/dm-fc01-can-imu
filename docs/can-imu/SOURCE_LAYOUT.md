@@ -62,4 +62,4 @@ Full builds passed both in a fresh build directory and in a standalone shallow c
 
 Both trimmed images are approximately 256 KB and contain their respective version metadata. All 7 protocol tests, the C++ ASan/UBSan core checks, and the CAN time-type checks passed.
 
-The trimmed-source build awaits flashing and hardware validation. Hardware results apply to the flashed version recorded in [VALIDATION.md](VALIDATION.md).
+The size table records the source-trimming baseline. Later thermal builds were flashed and tested; their image hashes, sizes, and results are recorded in [THERMAL_VALIDATION.md](THERMAL_VALIDATION.md).

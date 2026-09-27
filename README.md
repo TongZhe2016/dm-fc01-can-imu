@@ -4,7 +4,7 @@ Target hardware: STM32H743, BMI088, and ICM45686. The firmware streams six-axis 
 
 BMI088 provides the primary 200 Hz stream; ICM45686 is used for diagnostics. Each sample contains three-axis acceleration, three-axis angular velocity, and an MCU timestamp. The host maps device time to the ROS clock through CAN synchronization.
 
-In hardware tests on a shared bus, four motors controlled at 150 Hz plus a 200 Hz IMU stream used approximately 36.0%–43.7% of bus capacity. A 30-minute recording received 359995 samples with no missing samples. These hardware results apply to the flashed version. The current trimmed source has passed a full build and offline checks and awaits flashing and hardware validation.
+In hardware tests on a shared bus, four motors controlled at 150 Hz plus a 200 Hz IMU stream used approximately 36.0%–43.7% of bus capacity. A 30-minute recording received 359995 samples with no missing samples. The thermal firmware also passed single- and dual-heater tests, PI tuning, and sensor-loss protection checks. The validation board has saved settings for automatic heating at 50°C; see [Temperature control](docs/can-imu/THERMAL_CONTROL.md).
 
 | Document | Contents |
 |---|---|
@@ -79,7 +79,7 @@ During initial configuration, verify the CAN1 bitrate of 1 Mbps and the IDs on t
 | `CI0_AXB/AXS/AXT`, etc. | IMU0, acceleration X: bias/scale/temperature slope; independent values for 0/1, A/G, and X/Y/Z |
 | `CI0_ACAL/GCAL`, etc. | Corresponding calibration-valid flags; default 0 |
 
-Heaters are disabled by default. The implementation provides independent PI controllers, a maximum 60% duty cycle, a 200 ms temperature-update timeout, and latched faults for NaN, 60°C overtemperature, and failure to warm up within five minutes. A fault disables the affected heater; stopping the module disables both GPIO outputs. Complete physical thermal tests and fault-injection validation before enabling the heaters. See [Temperature Control](docs/can-imu/THERMAL_CONTROL.md) for the previous firmware design, temperature-read freshness checks, and acceptance procedure.
+The validation board has both heaters enabled at 50°C, with BMI088 P/I=0.08/0.002 and ICM45686 P/I=0.10/0.002. These saved settings load at startup. An unconfigured board starts with heating disabled. The controller limits duty to 60%, checks temperature freshness within 200 ms, and latches temperature faults. See [Temperature control](docs/can-imu/THERMAL_CONTROL.md) for configuration and protection details, and [Thermal validation](docs/can-imu/THERMAL_VALIDATION.md) for measured results.
 
 The calibration tool generates USB parameter commands for review before writing them to the device:
 
