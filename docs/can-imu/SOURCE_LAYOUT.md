@@ -52,4 +52,4 @@ python3 -m compileall -q host/can_imu ros2/fc_clamp_can_imu
 bash -n ROMFS/can_imu/init.d/rcS
 ```
 
-全新构建目录完整编译通过，生成 board ID 7140 的 `.px4` 应用包，应用镜像 256,364 字节（裁剪前已刷入版本为 298,436 字节）。协议 7 项测试、C++ ASan/UBSan 核心检查和 CAN 时间类型检查已通过。此前的实机验收对应 [VALIDATION.md](VALIDATION.md) 中的已刷入版本；本次源码裁剪产物尚未刷入实物。
+全新构建目录及独立浅克隆检出均完整编译通过（浅克隆依赖从本机同提交镜像初始化），生成 board ID 7140 的 `.px4` 应用包，应用镜像 256,364 字节（裁剪前已刷入版本为 298,436 字节）。协议 7 项测试、C++ ASan/UBSan 核心检查和 CAN 时间类型检查已通过。此前的实机验收对应 [VALIDATION.md](VALIDATION.md) 中的已刷入版本；本次源码裁剪产物尚未刷入实物。
