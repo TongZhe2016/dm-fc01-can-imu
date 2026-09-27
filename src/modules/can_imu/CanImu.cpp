@@ -18,7 +18,10 @@ class CanImu : public ModuleBase<CanImu> {
 public:
  ~CanImu() override { HEATER1_OUTPUT_EN(false); HEATER2_OUTPUT_EN(false); if(iface) { can.driver.getIface(0)->shutdown(); } }
  static int task_spawn(int argc,char *argv[]) {
-  _task_id=px4_task_spawn_cmd("can_imu",SCHED_DEFAULT,SCHED_PRIORITY_MAX-20,8000,run_trampoline,argv);
+  // Drain FIFO publications ahead of USB diagnostics (top: 237), but below
+  // the SPI sensor work queues (250/253). Sixteen queued updates cover only
+  // about 8 ms; console formatting must not starve this consumer.
+  _task_id=px4_task_spawn_cmd("can_imu",SCHED_DEFAULT,SCHED_PRIORITY_MAX-10,8000,run_trampoline,argv);
   return _task_id<0?-1:0;
  }
  static CanImu *instantiate(int,char**) { return new CanImu(); }
