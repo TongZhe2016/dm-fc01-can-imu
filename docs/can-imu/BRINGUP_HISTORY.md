@@ -58,16 +58,16 @@ g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined \
   real_drone/can_imu/tests/core_test.cpp -o /tmp/can-imu-core-test
 /tmp/can-imu-core-test
 cmake --build real_drone/docs/dm-fc01/PX4-Autopilot_dm-fc01/build/damiao_dm-fc01_imu -j4
-sh real_drone/aerial_arm_motor_autotune/agent.sh plan \
+sh real_drone/hardware_workbench/agent.sh plan \
   --config /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/bounded.yaml \
   --max-evaluations 1 --max-duration-s 300
-sh real_drone/aerial_arm_motor_autotune/agent.sh baseline --simulate \
+sh real_drone/hardware_workbench/agent.sh baseline --simulate \
   --config /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/bounded.yaml \
   --max-evaluations 1 --max-duration-s 300 \
   --output /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/simulate
 ```
 
-From `real_drone/aerial_arm_motor_autotune`:
+From `real_drone/hardware_workbench`:
 
 ```bash
 PYTHONPATH=tests .venv/bin/python -m unittest test_trace_nonfinite -v
@@ -128,4 +128,4 @@ Per-axis read-only recheck: J1/J2/J3 UUIDs matched the original records, positio
 
 The user confirmed repair of the J4 disconnection, a full-system power cycle, and placement at [90,0,0,0]. USB checks showed can_imu not running and CI_AUTOSTART=0 saved. All four axes matched their original UUIDs and passed stationarity checks. The shared driver's `calibrate_reference` function wrote the reference coordinates. Per-axis verification and a subsequent full query passed: 89.999443, 0.000387, 0.000222, and −0.000175°. No motion targets were sent and gains were unchanged. Calibration persistence had not yet been verified through another power cycle.
 
-Command: `real_drone/aerial_arm_motor_autotune/.venv/bin/python /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/calibrate_reference_run.py` (the same wrapper passed --simulate before execution). Results were saved as `reference-calibration-live-20260927_151708.json` in that directory. An initial attempt to read the tuning configuration with the driver CLI exited because the control field was missing, before opening the hardware. Calibration then completed using the validated tuning configuration and the same maintenance function as the UI. IMU CAN remained disabled; the cause of J4's unexpected motion and shared-bus protocol isolation still required investigation.
+Command: `real_drone/hardware_workbench/.venv/bin/python /home/airman/.local/state/aerial-arm-motor-autotune/imu-can-20260927/calibrate_reference_run.py` (the same wrapper passed --simulate before execution). Results were saved as `reference-calibration-live-20260927_151708.json` in that directory. An initial attempt to read the tuning configuration with the driver CLI exited because the control field was missing, before opening the hardware. Calibration then completed using the validated tuning configuration and the same maintenance function as the UI. IMU CAN remained disabled; the cause of J4's unexpected motion and shared-bus protocol isolation still required investigation.
