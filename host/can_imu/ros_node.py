@@ -77,7 +77,8 @@ class CanImuNode(Node):
         flags=event['flags']
         if not flags&1 or flags&(8|16):self.reason='invalid_or_diagnostic_timestamp'
         elif mapped is None:self.reason='time_sync_not_ready'
-        elif not -.002<=now-mapped<=.020:self.reason='sample_age_out_of_range'
+        # Preserve sample time; consumers own their input-age budgets.
+        elif now-mapped < -.002:self.reason='sample_age_out_of_range'
         elif self.get_parameter('require_calibration').value and not flags&2:self.reason='calibration_required'
         elif self.get_parameter('require_warm').value and not flags&4:self.reason='temperature_not_stable'
         else:self.reason='ready';self.pub.publish(msg)
